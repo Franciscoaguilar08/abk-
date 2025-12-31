@@ -6,7 +6,6 @@ interface BioBackgroundProps {
 
 export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Optimization: Use useRef instead of useState to prevent re-renders on every mouse move
   const mousePos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -21,16 +20,17 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
     // --- CONFIGURATION BASED ON VARIANT ---
     const isLanding = variant === 'landing';
     
-    // Density: Less particles in App mode to reduce noise
-    const particleCount = Math.floor((width * height) / (isLanding ? 18000 : 25000)); 
+    // Density: Higher density for Plexus effect
+    const particleCount = Math.floor((width * height) / (isLanding ? 14000 : 25000)); 
     
-    // Interaction: Only Landing has significant mouse interaction
-    const mouseDistance = isLanding ? 180 : 0; 
-    const connectionDistance = isLanding ? 140 : 110;
+    // Interaction
+    const mouseDistance = isLanding ? 220 : 0; 
+    const connectionDistance = isLanding ? 160 : 110;
     
-    // Visuals: App mode is dimmer and slower
-    const baseOpacity = isLanding ? 0.5 : 0.15;
-    const speedMultiplier = isLanding ? 0.4 : 0.15; // Much slower in app
+    // Visuals: Clean Medical Look (Cyan / White / Slate)
+    // Base opacity lower for subtle medical feel
+    const baseOpacity = isLanding ? 0.4 : 0.15;
+    const speedMultiplier = isLanding ? 0.3 : 0.15; 
 
     const particles: { x: number; y: number; vx: number; vy: number; size: number }[] = [];
 
@@ -41,7 +41,7 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
         y: Math.random() * height,
         vx: (Math.random() - 0.5) * speedMultiplier,
         vy: (Math.random() - 0.5) * speedMultiplier,
-        size: Math.random() * (isLanding ? 2 : 1.5) + 1
+        size: Math.random() * (isLanding ? 2.5 : 1.5) + 0.5
       });
     }
 
@@ -53,7 +53,6 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
 
     const handleMouseMove = (e: MouseEvent) => {
         if (isLanding) {
-            // Update ref directly without triggering React render
             mousePos.current = { x: e.clientX, y: e.clientY };
         }
     };
@@ -74,7 +73,7 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
         if (p.x < 0 || p.x > width) p.vx *= -1;
         if (p.y < 0 || p.y > height) p.vy *= -1;
 
-        // Mouse Interaction (Only for Landing - and softer than before)
+        // Mouse Interaction
         if (isLanding) {
             const dxMouse = mousePos.current.x - p.x;
             const dyMouse = mousePos.current.y - p.y;
@@ -83,7 +82,6 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
             if (distMouse < mouseDistance) {
                 const forceDirectionX = dxMouse / distMouse;
                 const forceDirectionY = dyMouse / distMouse;
-                // Reduced repulsion force for smoother feel
                 const force = (mouseDistance - distMouse) / mouseDistance;
                 const directionX = forceDirectionX * force * 0.5; 
                 const directionY = forceDirectionY * force * 0.5;
@@ -93,14 +91,14 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
             }
         }
 
-        // Draw Dot
+        // Draw Dot (White/Cyan hue)
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        // Random opacity pulse based on baseOpacity
-        ctx.fillStyle = `rgba(139, 92, 246, ${baseOpacity + (Math.random() * 0.1)})`; 
+        // Cyan-ish white
+        ctx.fillStyle = `rgba(207, 250, 254, ${baseOpacity + (Math.random() * 0.2)})`; 
         ctx.fill();
 
-        // Connect Lines
+        // Connect Lines (Plexus Effect)
         for (let j = i + 1; j < particles.length; j++) {
             const p2 = particles[j];
             const dx = p.x - p2.x;
@@ -109,10 +107,10 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
 
             if (dist < connectionDistance) {
                 ctx.beginPath();
-                // Emerald connection, fading out with distance
-                const lineAlpha = (1 - dist / connectionDistance) * (isLanding ? 0.4 : 0.1);
-                ctx.strokeStyle = `rgba(16, 185, 129, ${lineAlpha})`; 
-                ctx.lineWidth = isLanding ? 0.5 : 0.3;
+                // Cyan connection lines (Medical Blue/Green)
+                const lineAlpha = (1 - dist / connectionDistance) * (isLanding ? 0.25 : 0.05);
+                ctx.strokeStyle = `rgba(34, 211, 238, ${lineAlpha})`; // Cyan-400
+                ctx.lineWidth = isLanding ? 0.8 : 0.3;
                 ctx.moveTo(p.x, p.y);
                 ctx.lineTo(p2.x, p2.y);
                 ctx.stroke();
@@ -130,17 +128,17 @@ export const BioBackground: React.FC<BioBackgroundProps> = ({ variant }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       cancelAnimationFrame(animId);
     };
-  }, [variant]); // Dependency only on variant, not mousePos
+  }, [variant]);
 
   return (
     <div className="fixed inset-0 pointer-events-none -z-10 bg-[#020617]">
-         {/* Base Gradient for depth */}
+         {/* Base Gradient for depth - darker blue/slate base */}
         <canvas 
             ref={canvasRef} 
             className="absolute inset-0 pointer-events-none z-0"
         />
-        {/* Vignette Overlay to focus center */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#020617_95%)] pointer-events-none z-10"></div>
+        {/* Subtle radial gradient to make center pop */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#020617_90%)] pointer-events-none z-10"></div>
     </div>
   );
 };

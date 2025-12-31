@@ -10,13 +10,13 @@ import { NDimensionalCard } from './components/NDimensionalCard';
 import { LandingPage } from './components/LandingPage';
 import { CommandHub } from './components/CommandHub';
 import { DiscoveryLab } from './components/DiscoveryLab';
-import { RiskDistributionChart, OncologyRiskBarChart } from './components/Charts';
+import { RiskDistributionChart, OncologyTargetChart } from './components/Charts';
 import { SciFiButton } from './components/SciFiButton';
 import { BioBackground } from './components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Zap, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
-  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, LayoutGrid
+  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, LayoutGrid, AlertCircle
 } from 'lucide-react';
 import { PillIcon, AlertIcon } from './components/Icons';
 
@@ -131,9 +131,9 @@ const App: React.FC = () => {
       setActiveTab('overview');
       setLoading(false);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Analysis pipeline failed. Ensure valid API Key and network connection.");
+      setError(err.message || "Analysis pipeline failed. Ensure valid API Key and network connection.");
       setLoading(false);
     }
   };
@@ -214,10 +214,10 @@ const App: React.FC = () => {
              </div>
              <div className="flex flex-col">
                  <span className="font-brand font-bold text-xl tracking-tight text-white group-hover:text-slate-200 transition-colors">
-                    ABK Genomics
+                    DIGITAL TWIN
                  </span>
                  <span className={`text-[10px] uppercase tracking-widest font-bold ${activeModule === 'DISCOVERY' ? 'text-violet-500' : 'text-emerald-500'}`}>
-                    {activeModule === 'DISCOVERY' ? 'R&D Lab' : 'Clinical Suite'}
+                    {activeModule === 'DISCOVERY' ? 'R&D Lab' : 'Genomic Core'}
                  </span>
              </div>
           </div>
@@ -265,19 +265,38 @@ const App: React.FC = () => {
         {/* MODULE A: CLINICAL */}
         <div className={activeModule === 'CLINICAL' ? 'block' : 'hidden'}>
             
+            {/* ERROR DISPLAY */}
+            {error && !loading && (
+                <div className="mb-8 animate-fade-in-up">
+                    <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-start gap-3">
+                         <AlertCircle className="w-6 h-6 text-red-500 mt-0.5 shrink-0" />
+                         <div>
+                             <h3 className="text-red-400 font-bold mb-1">System Alert</h3>
+                             <p className="text-red-200 text-sm">{error}</p>
+                             <button 
+                                onClick={() => setError(null)} 
+                                className="mt-2 text-xs font-bold uppercase tracking-wider text-red-400 hover:text-white underline"
+                             >
+                                Dismiss
+                             </button>
+                         </div>
+                    </div>
+                </div>
+            )}
+            
             {/* INPUT & CONFIG */}
             {!result && !loading && (
                 <div className="animate-fade-in-up">
                     <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-8">
                         <div className="max-w-2xl space-y-6">
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 text-xs font-bold uppercase tracking-wider">
-                                <ShieldCheck className="w-3 h-3" /> Clinical Decision Support System
+                                <ShieldCheck className="w-3 h-3" /> Digital Twin Core
                             </div>
                             <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-none font-brand">
-                                Genomic <span className="text-emerald-400">Risk Stratification</span>
+                                Genomic <span className="text-emerald-400">Integration</span>
                             </h1>
                             <p className="text-slate-400 text-lg max-w-lg leading-relaxed">
-                                Standardized variant interpretation pipeline integrated with ClinVar, CPIC, and gnomAD real-time databases.
+                                Upload VCF data to instantiate your digital biological twin. Real-time simulation of pharmacogenomics and oncology risks.
                             </p>
                         </div>
                     </div>
@@ -423,7 +442,7 @@ const App: React.FC = () => {
                                             disabled={!inputData}
                                             className="w-full"
                                         >
-                                            GENERATE ANALYSIS
+                                            INITIALIZE TWIN
                                             <ArrowRight className="w-5 h-5" />
                                         </SciFiButton>
                                     </div>
@@ -446,7 +465,7 @@ const App: React.FC = () => {
                                 </div>
                                 <div>
                                     <h2 className="text-xl font-brand font-bold text-white tracking-wide">Live Pipeline</h2>
-                                    <p className="text-xs text-slate-400 font-mono">External API Gateway Active</p>
+                                    <p className="text-xs text-slate-400 font-mono">Building Digital Twin Model...</p>
                                 </div>
                             </div>
                             <div className="flex flex-col items-center justify-center py-8">
@@ -548,8 +567,8 @@ const App: React.FC = () => {
                                         <RiskDistributionChart variants={result.variants || []} />
                                     </div>
                                     <div className="glass-panel p-6 rounded-xl">
-                                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-6">Oncology Predisposition</h3>
-                                        <OncologyRiskBarChart profiles={result.oncologyProfiles || []} />
+                                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-6">Oncology Target Map</h3>
+                                        <OncologyTargetChart profiles={result.oncologyProfiles || []} />
                                     </div>
                                 </div>
                                 {result.nDimensionalAnalysis && (

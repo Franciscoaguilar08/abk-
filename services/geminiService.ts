@@ -5,6 +5,7 @@ import { batchFetchVariantData } from "./bioinformaticsService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const modelId = "gemini-3-pro-preview";
+const flashModelId = "gemini-3-flash-preview";
 
 /**
  * Utility to yield control back to the main thread.
@@ -14,16 +15,40 @@ const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
 /**
  * Helper to safely parse JSON from AI response.
- * Handles markdown code blocks and logs errors.
+ * Handles markdown code blocks, finding JSON objects within text, and logs errors.
  */
 const cleanAndParseJSON = (text: string) => {
   try {
-    // Remove markdown code blocks if present (e.g. ```json ... ```)
-    let cleaned = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleaned);
+    // 1. Remove Markdown code blocks if present
+    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    // 2. Find the outermost JSON object
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+
+    // 3. Attempt parse
+    return JSON.parse(clean);
+
   } catch (e) {
     console.error("JSON Parse Error. Raw Text length:", text.length);
-    // console.debug("Raw Text:", text); // Uncomment for deep debugging
+    console.debug("Failed Text Preview:", text.substring(0, 200) + "...");
+    
+    // Attempt to repair common JSON issues (like unescaped newlines in strings)
+    try {
+        const repaired = text.replace(/(?<!\\)\n/g, "\\n");
+        const firstBrace = repaired.indexOf('{');
+        const lastBrace = repaired.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            return JSON.parse(repaired.substring(firstBrace, lastBrace + 1));
+        }
+    } catch (repairError) {
+        console.error("JSON Repair Failed", repairError);
+    }
+
     throw new Error("Failed to parse AI response. The analysis may have been interrupted or is too large. Please try a smaller dataset.");
   }
 };
@@ -40,7 +65,7 @@ const extractVariantsPrompt = async (input: string) => {
     `;
 
     const response = await ai.models.generateContent({
-        model: modelId,
+        model: flashModelId,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -111,14 +136,19 @@ export const analyzeGenomicData = async (
       }
   }).join("\n---\n");
 
-  if(onStatusUpdate) onStatusUpdate("Running N-Dimensional Convergence Neural Net...");
+  if(onStatusUpdate) onStatusUpdate("Running Digital Twin Convergence Engine...");
   await yieldToMain();
 
   const systemInstruction = `
-    You are ABK Genomics AI (Clinical Module).
+    You are ABK Genomics AI (Digital Twin Module).
     Use the provided Real-Time API Data.
     Tasks: Pharmacogenomics (CPIC), N-Dimensional Convergence (Multi-omics implication), and Biophysical XAI.
-    Return valid JSON.
+    
+    CRITICAL:
+    - Return ONLY valid JSON.
+    - Escape all double quotes inside strings (e.g. \\").
+    - Do not output Markdown formatting if possible, just the JSON.
+    - Be concise in the summary to avoid token limits.
   `;
 
   const prompt = `
@@ -133,7 +163,7 @@ export const analyzeGenomicData = async (
     config: {
       systemInstruction: systemInstruction,
       responseMimeType: "application/json",
-      maxOutputTokens: 8192, // Ensure enough budget for large JSON
+      maxOutputTokens: 8192, 
       responseSchema: {
         type: Type.OBJECT,
         properties: {
