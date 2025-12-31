@@ -1,3 +1,4 @@
+
 export enum VariantRiskLevel {
   LOW = 'LOW',
   MODERATE = 'MODERATE',
@@ -32,6 +33,7 @@ export interface DrugInteraction {
   drugName: string;
   implication: string; // e.g., "Requires lower dose", "Avoid use"
   severity: 'INFO' | 'WARNING' | 'DANGER';
+  cpicGuidelineUrl?: string; // Link to specific guideline
 }
 
 // XAI & Attention Map Structures
@@ -102,6 +104,17 @@ export interface EquityAnalysis {
   explanation: string;
 }
 
+// NEW: N-Dimensional Analysis (Convergence)
+export interface NDimensionalAnalysis {
+    compositeBiomarker: string; // e.g. "Inflammo-Metabolic Axis"
+    convergenceScore: number; // 0-100
+    riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+    factors: string[]; // List of genes/factors involved (e.g. ["CYP2D6", "Ancestry", "Inflammation"])
+    clinicalInsight: string; // The "Hidden" insight
+    networkNodes: { id: string, label: string, group: 'GENE' | 'CLINICAL' | 'LIFESTYLE' }[];
+    networkLinks: { source: string, target: string, value: number }[];
+}
+
 export interface AnalysisResult {
   patientSummary: string;
   variants: VariantAnalysis[];
@@ -110,4 +123,5 @@ export interface AnalysisResult {
   phenotypeTraits: PhenotypeTrait[];
   overallRiskScore: number; 
   equityAnalysis?: EquityAnalysis; 
+  nDimensionalAnalysis?: NDimensionalAnalysis; // New N-Dim Layer
 }

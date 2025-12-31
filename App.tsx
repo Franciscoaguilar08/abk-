@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { analyzeGenomicData } from './services/geminiService';
 import { generateClinicalReport } from './services/pdfService';
@@ -6,6 +7,7 @@ import { VariantCard } from './components/VariantCard';
 import { PharmaCard } from './components/PharmaCard';
 import { PhenotypeCard } from './components/PhenotypeCard';
 import { AncestryCard } from './components/AncestryCard';
+import { NDimensionalCard } from './components/NDimensionalCard';
 import { LandingPage } from './components/LandingPage';
 import { RiskDistributionChart, OncologyRiskBarChart } from './components/Charts';
 import { SciFiButton } from './components/SciFiButton';
@@ -13,9 +15,9 @@ import { BioBackground } from './components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Zap, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
-  Upload, FileCode, Database, ArrowRight, X, Loader2, Server, ShieldCheck, Info, Download, BrainCircuit, Globe2, Network
+  Upload, FileCode, Database, ArrowRight, X, Loader2, Server, ShieldCheck, Info, Download, BrainCircuit, Globe2, Network, Search, AlertTriangle, Pill
 } from 'lucide-react';
-import { PillIcon } from './components/Icons';
+import { PillIcon, AlertIcon } from './components/Icons';
 
 // Example Data Sets
 const EXAMPLES = [
@@ -80,6 +82,10 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'variants' | 'pharma' | 'oncology' | 'phenotypes'>('overview');
   
+  // Pharma Simulation State
+  const [drugSearch, setDrugSearch] = useState("");
+  const [drugSimulationResult, setDrugSimulationResult] = useState<{status: string, message: string, color: string} | null>(null);
+
   // New State for Input Tabs
   const [inputType, setInputType] = useState<'upload' | 'paste' | 'library'>('upload');
 
@@ -99,7 +105,7 @@ const App: React.FC = () => {
     
     setLoading(true);
     setError(null);
-    setLoadingStatus("Connecting to Analysis Pipeline...");
+    setLoadingStatus("Initializing Analysis Protocol...");
     
     try {
       // Pass the status setter callback to the service
@@ -144,6 +150,38 @@ const App: React.FC = () => {
     if (ex) {
         setInputData(ex.data);
     }
+  };
+
+  // PHARMA SIMULATION LOGIC
+  const simulatePrescription = () => {
+      if (!result || !drugSearch) return;
+      
+      const query = drugSearch.toLowerCase();
+      let foundInteraction = null;
+
+      // Search through pharma profiles for matches
+      result.pharmaProfiles.forEach(p => {
+          p.interactions.forEach(i => {
+              if (i.drugName.toLowerCase().includes(query)) {
+                  foundInteraction = i;
+              }
+          });
+      });
+
+      if (foundInteraction) {
+          const fi = foundInteraction as any;
+          setDrugSimulationResult({
+              status: "CONTRAINDICATED / CAUTION",
+              message: `Alert: ${fi.drugName} - ${fi.implication}. Severity: ${fi.severity}`,
+              color: "text-red-400 border-red-500/50 bg-red-900/20"
+          });
+      } else {
+          setDrugSimulationResult({
+              status: "NO GENETIC ALERTS",
+              message: `No specific CPIC contraindications found for ${drugSearch} in this genetic profile. Standard dosing applies.`,
+              color: "text-emerald-400 border-emerald-500/50 bg-emerald-900/20"
+          });
+      }
   };
 
   // --- Render ---
@@ -459,6 +497,11 @@ const App: React.FC = () => {
                     {activeTab === 'overview' && (
                         <div className="space-y-6">
                             
+                            {/* N-Dimensional Analysis (Convergence Layer) - NEW TASK 2 */}
+                            {result.nDimensionalAnalysis && (
+                                <NDimensionalCard analysis={result.nDimensionalAnalysis} />
+                            )}
+
                             {/* Ancestry/Equity Card (Only if equity analysis present) */}
                             {result.equityAnalysis && result.equityAnalysis.biasCorrectionApplied && (
                                 <AncestryCard analysis={result.equityAnalysis} />
@@ -534,11 +577,67 @@ const App: React.FC = () => {
 
                     {/* Pharma Tab */}
                     {activeTab === 'pharma' && (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                            {(!result.pharmaProfiles || result.pharmaProfiles.length === 0) && <p className="text-slate-500 col-span-2 text-center py-20 italic">No pharmacogenomic data available.</p>}
-                            {result.pharmaProfiles?.map((profile, idx) => (
-                                <PharmaCard key={idx} profile={profile} />
-                            ))}
+                        <div className="space-y-6">
+                            {/* --- TASK 1: PRE-PRESCRIPTION SIMULATOR --- */}
+                            <div className="glass-panel p-6 rounded-xl border-l-4 border-l-emerald-500 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-6 opacity-10">
+                                    <Activity className="w-24 h-24 text-emerald-400" />
+                                </div>
+                                
+                                <div className="flex items-center justify-between mb-6 relative z-10">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                            <Pill className="w-6 h-6 text-emerald-400" />
+                                            EHR Prescription Simulator
+                                        </h3>
+                                        <p className="text-slate-400 text-sm mt-1">
+                                            Pre-prescription check against CPIC guidelines. Enter a drug name to simulate safety alert.
+                                        </p>
+                                    </div>
+                                    <div className="px-3 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase">
+                                        <span className="relative flex h-2 w-2">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        Live CPIC Mode
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-4 mb-4 relative z-10">
+                                    <div className="flex-grow relative">
+                                        <input 
+                                            type="text" 
+                                            value={drugSearch}
+                                            onChange={(e) => setDrugSearch(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && simulatePrescription()}
+                                            placeholder="Enter drug name (e.g., Warfarin, Codeine, Simvastatin)..."
+                                            className="w-full bg-slate-900/80 border border-slate-700 text-white rounded-lg px-4 py-3 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none pl-10"
+                                        />
+                                        <Search className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
+                                    </div>
+                                    <SciFiButton onClick={simulatePrescription} disabled={!drugSearch} className="whitespace-nowrap">
+                                        CHECK SAFETY
+                                    </SciFiButton>
+                                </div>
+
+                                {/* Simulation Result Alert */}
+                                {drugSimulationResult && (
+                                    <div className={`p-4 rounded-lg border flex items-start gap-3 relative z-10 animate-fade-in ${drugSimulationResult.color}`}>
+                                        <AlertIcon className="w-6 h-6 mt-0.5 shrink-0" />
+                                        <div>
+                                            <h4 className="font-bold text-sm uppercase tracking-wider mb-1">{drugSimulationResult.status}</h4>
+                                            <p className="text-sm font-medium">{drugSimulationResult.message}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                {(!result.pharmaProfiles || result.pharmaProfiles.length === 0) && <p className="text-slate-500 col-span-2 text-center py-20 italic">No pharmacogenomic data available.</p>}
+                                {result.pharmaProfiles?.map((profile, idx) => (
+                                    <PharmaCard key={idx} profile={profile} />
+                                ))}
+                            </div>
                         </div>
                     )}
 

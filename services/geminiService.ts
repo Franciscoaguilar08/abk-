@@ -1,9 +1,16 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const modelId = "gemini-3-pro-preview";
+
+/**
+ * Utility to yield control back to the main thread.
+ * This prevents the UI from freezing during heavy synchronous operations or rapid status updates.
+ */
+const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // --- STEP 1: PARSE RAW TEXT TO IDENTIFY VARIANTS ---
 const extractVariantsPrompt = async (input: string) => {
@@ -36,6 +43,8 @@ const extractVariantsPrompt = async (input: string) => {
     
     try {
         if(!response.text) return [];
+        // Yield before parsing potentially large JSON
+        await yieldToMain();
         return JSON.parse(response.text) as { rsId: string, gene: string }[];
     } catch(e) {
         console.error("Extraction failed", e);
@@ -53,10 +62,14 @@ export const analyzeGenomicData = async (
 
   // 1. Extraction Phase
   if(onStatusUpdate) onStatusUpdate("Parsing input for variant identifiers...");
+  await yieldToMain(); // Allow UI to render the status change
+  
   const extractedVariants = await extractVariantsPrompt(genomicInput);
   
   // 2. Real Data Fetching Phase
   if(onStatusUpdate) onStatusUpdate("Querying MyVariant.info, ClinVar & gnomAD...");
+  await yieldToMain();
+
   const rsIds = extractedVariants.map(v => v.rsId).filter(id => id && id.startsWith('rs'));
   
   // Fetch real data
@@ -67,7 +80,9 @@ export const analyzeGenomicData = async (
   }
 
   // 3. Construct Context for Gemini
-  // We feed the REAL data back into the prompt so Gemini doesn't hallucinate scores.
+  // Heavy string mapping operation - yield first
+  await yieldToMain();
+  
   const realDataContext = extractedVariants.map(v => {
       const real = realDataMap.get(v.rsId);
       if (real) {
@@ -86,30 +101,34 @@ export const analyzeGenomicData = async (
       }
   }).join("\n---\n");
 
-  if(onStatusUpdate) onStatusUpdate("Synthesizing Biophysical XAI & 3D Structure...");
+  if(onStatusUpdate) onStatusUpdate("Running N-Dimensional Convergence Neural Net...");
+  // CRITICAL YIELD: Maintained to fix the "freeze" during heavy processing, 
+  // but removed the artificial 50ms delay for the animation that was removed.
+  await yieldToMain();
 
   // 4. Final Prompt
   const systemInstruction = `
-    You are ABK Genomics AI, a scientific Clinical Decision Support engine.
+    You are ABK Genomics AI, a scientific Clinical Decision Support engine linked to simulated EHR data.
     
     INPUT CONTEXT:
-    You have been provided with REAL-TIME API DATA from MyVariant.info and ClinVar.
-    You MUST use the provided CADD scores, ClinVar status, and Frequency data exactly as given. DO NOT HALLUCINATE SCORES.
+    You have REAL-TIME API DATA. Use it exactly.
     
-    TASK 1: BIOPHYSICAL EXPLANATION (XAI)
-    - Explain *why* the variant is pathogenic based on the provided CADD/REVEL scores.
-    - If a Protein Change is provided (e.g. p.Val600Glu), analyze the structural impact (e.g. "Hydrophobic Valine replaced by charged Glutamate").
-    
-    TASK 2: 3D STRUCTURE MAPPING
-    - For the genes identified, identify the BEST Representative PDB ID (Protein Data Bank) for visualization.
-    - Example: TP53 -> '4IBQ', BRAF -> '4MNE'.
-    - Extract the integer residue position from the protein change (e.g. Val600Glu -> 600) for the 'variantPosition' field.
+    TASK 1: PHARMACOGENOMICS "PRE-PRESCRIPTION" (CPIC)
+    - If pharmacogenes (CYP2D6, CYP2C19, SLCO1B1, etc.) are present, define the Metabolizer Status.
+    - CRITICAL: List SPECIFIC drugs that should be flagged in an EHR *before* prescription (e.g., "Alert: Do not prescribe Codeine", "Alert: Reduce Warfarin dose").
+    - Cite CPIC guidelines logic implicitly.
 
-    TASK 3: ANCESTRY & PHARMA
-    - Apply pharmacogenomic guidelines (CPIC) if relevant genes (CYP2D6, etc.) are present.
-    - Ancestry: ${ancestry} context active.
+    TASK 2: N-DIMENSIONAL CONVERGENCE (The "Hidden" Biomarker)
+    - Don't just list variants. Perform a "Multi-Omics" convergence.
+    - Combine: [Ancestry: ${ancestry}] + [Variants Identified] + [Metabolic Status].
+    - Output a "Composite Biomarker" (e.g., "Cardio-Inflammatory Susceptibility" or "Neuro-Metabolic Resistance").
+    - Generate a network of nodes (Genes, Clinical Factors) and links to visualize this convergence.
 
-    Return valid JSON matching the schema.
+    TASK 3: BIOPHYSICAL XAI & 3D
+    - Explain *why* variants are pathogenic using structural biology logic.
+    - Identify PDB IDs.
+
+    Return valid JSON.
   `;
 
   const prompt = `
@@ -131,6 +150,24 @@ export const analyzeGenomicData = async (
         properties: {
           patientSummary: { type: Type.STRING },
           overallRiskScore: { type: Type.NUMBER },
+          nDimensionalAnalysis: {
+            type: Type.OBJECT,
+            properties: {
+                compositeBiomarker: { type: Type.STRING },
+                convergenceScore: { type: Type.NUMBER },
+                riskLevel: { type: Type.STRING },
+                factors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                clinicalInsight: { type: Type.STRING },
+                networkNodes: { 
+                    type: Type.ARRAY, 
+                    items: { type: Type.OBJECT, properties: { id: {type: Type.STRING}, label: {type: Type.STRING}, group: {type: Type.STRING} } }
+                },
+                networkLinks: {
+                    type: Type.ARRAY,
+                    items: { type: Type.OBJECT, properties: { source: {type: Type.STRING}, target: {type: Type.STRING}, value: {type: Type.NUMBER} } }
+                }
+            }
+          },
           equityAnalysis: {
             type: Type.OBJECT,
             properties: {
@@ -194,7 +231,8 @@ export const analyzeGenomicData = async (
                         properties: {
                             drugName: { type: Type.STRING },
                             implication: { type: Type.STRING },
-                            severity: { type: Type.STRING }
+                            severity: { type: Type.STRING },
+                            cpicGuidelineUrl: { type: Type.STRING }
                         }
                     }
                 }
@@ -236,6 +274,8 @@ export const analyzeGenomicData = async (
     throw new Error("No response from Gemini");
   }
 
+  // Final yield before parsing output
+  await yieldToMain();
   const parsed = JSON.parse(response.text);
   
   // Map Parsed Data to Types (ensuring defaults)
@@ -243,6 +283,7 @@ export const analyzeGenomicData = async (
       patientSummary: parsed.patientSummary,
       overallRiskScore: parsed.overallRiskScore || 0,
       equityAnalysis: parsed.equityAnalysis,
+      nDimensionalAnalysis: parsed.nDimensionalAnalysis,
       variants: (parsed.variants || []).map((v: any) => ({
           ...v,
           riskLevel: v.riskLevel || VariantRiskLevel.UNCERTAIN,
