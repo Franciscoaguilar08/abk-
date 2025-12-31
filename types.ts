@@ -1,4 +1,5 @@
 
+
 export enum VariantRiskLevel {
   LOW = 'LOW',
   MODERATE = 'MODERATE',
@@ -115,6 +116,13 @@ export interface NDimensionalAnalysis {
     networkLinks: { source: string, target: string, value: number }[];
 }
 
+export interface CorrelationPoint {
+  x: string;
+  y: string;
+  value: number;
+  significance: number;
+}
+
 export interface AnalysisResult {
   patientSummary: string;
   variants: VariantAnalysis[];
@@ -128,25 +136,48 @@ export interface AnalysisResult {
 
 // === MODULE B: R&D DISCOVERY TYPES ===
 
-export interface MolecularTarget {
-  targetName: string; // e.g., "EGFR", "JAK2"
-  mechanism: string; // e.g., "Tyrosine Kinase Inhibitor"
-  druggabilityScore: number; // 0.0 - 1.0 (Systems Biology metric)
-  confidence: number; // AI Confidence
-  associatedPathway: string;
-  status: 'NOVEL' | 'REPURPOSING' | 'KNOWN';
+// 1. Ligand Architect
+export interface DockingSimulation {
+    targetName: string;
+    pdbId: string; // The protein structure
+    ligandName: string;
+    bindingEnergy: number; // kcal/mol
+    activeSiteResidues: number[];
 }
 
-export interface CorrelationPoint {
-  x: string; // Variable A (e.g., Gene Expression)
-  y: string; // Variable B (e.g., Variant Impact)
-  value: number; // -1.0 to 1.0 (Pearson/Spearman correlation)
-  significance: number; // p-value simulation
+// 2. System Perturbation
+export interface NetworkNode {
+    id: string;
+    group: 'GENE' | 'PROTEIN' | 'METABOLITE';
+    impactScore: number; // 0-1, influences radius
+}
+export interface NetworkLink {
+    source: string;
+    target: string;
+    interactionType: 'ACTIVATION' | 'INHIBITION';
 }
 
-export interface DiscoveryAnalysisResult {
-  hypothesis: string;
-  molecularTargets: MolecularTarget[];
-  correlationMatrix: CorrelationPoint[];
-  latentSpaceInsight: string;
+// 3. Insight Miner
+export interface LiteratureInsight {
+    title: string;
+    source: string; // e.g. "Nature Medicine, 2024"
+    summary: string;
+    relevanceScore: number; // 0-100
+}
+
+// 4. Stratification
+export interface PopulationData {
+    population: string; // e.g. "East Asian", "European"
+    alleleFrequency: number;
+    predictedEfficacy: number; // 0-100%
+}
+
+export interface SandboxResult {
+    targetId: string;
+    hypothesis: string;
+    docking: DockingSimulation;
+    network: { nodes: NetworkNode[], links: NetworkLink[] };
+    literature: LiteratureInsight[];
+    stratification: PopulationData[];
+    convergenceInsight: string;
 }

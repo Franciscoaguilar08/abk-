@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup, DiscoveryAnalysisResult } from "../types";
+import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -280,51 +280,35 @@ export const analyzeGenomicData = async (
   } as AnalysisResult;
 };
 
-// --- MODULE B: R&D DISCOVERY ANALYSIS ---
+// --- MODULE B: R&D DISCOVERY ANALYSIS (INNOVATION SANDBOX) ---
 export const analyzeDiscoveryData = async (
-    genomics: string,
-    proteomics: string,
-    imagingMeta: string,
+    targetInput: string,
     onStatusUpdate?: (status: string) => void
-): Promise<DiscoveryAnalysisResult> => {
+): Promise<SandboxResult> => {
     
-    if(onStatusUpdate) onStatusUpdate("Ingesting Multi-Omic Data Streams...");
+    if(onStatusUpdate) onStatusUpdate(`Initializing Innovation Sandbox for target: ${targetInput}...`);
     await yieldToMain();
 
     const systemInstruction = `
       You are ABK Genomics R&D (Discovery Module).
-      Your goal is MOLECULAR TARGET DISCOVERY for Pharmaceutical Development.
+      Your goal is to simulate a "Sandbox" environment for drug discovery.
       
-      INPUT:
-      1. Genomics (VCF/Sequence)
-      2. Proteomics (Expression Levels)
-      3. Imaging Metadata (Cell morphology/Radiomics)
+      INPUT: A Gene or Protein Target (e.g. "EGFR", "KRAS").
 
-      METHODOLOGY:
-      - Use "Latent Pattern Recognition" to find non-linear correlations between Gene Variants and Protein Expression.
-      - Identify "Druggable Targets" (Proteins/Genes) that are driving the disease state described or implied.
-      - Use Systems Biology principles (Pathway Analysis, PPI Networks).
+      OUTPUT A JSON with 4 distinct modules:
+      1. Ligand Architect: Select a REAL PDB ID (preferably with a ligand) and binding energy data.
+      2. System Perturbation: A small metabolic/signaling network (nodes and links) affected by this target.
+      3. Insight Miner: 3-4 simulated PubMed citations relevant to recent research on this target.
+      4. Stratification Engine: Population allele frequency data for relevant variants of this target.
 
-      OUTPUT:
-      - List of Molecular Targets with Druggability Score (0-1).
-      - Correlation Matrix (Heatmap data) showing relationships between specific Genes and Phenotypes.
-      - A hypothesis summary.
+      Be scientifically accurate with PDB IDs and pathway connections.
     `;
 
     const prompt = `
-      Analyze the following Multi-Omics Dataset:
-      
-      [GENOMICS DATA]:
-      ${genomics.substring(0, 3000)}
-
-      [PROTEOMICS DATA]:
-      ${proteomics.substring(0, 3000)}
-
-      [IMAGING METADATA]:
-      ${imagingMeta.substring(0, 1000)}
+      Generate Innovation Sandbox data for Target: ${targetInput}.
     `;
 
-    if(onStatusUpdate) onStatusUpdate("Calculating Latent Space Correlations...");
+    if(onStatusUpdate) onStatusUpdate("Simulating Molecular Docking & Network Perturbation...");
     await yieldToMain();
 
     const response = await ai.models.generateContent({
@@ -337,34 +321,69 @@ export const analyzeDiscoveryData = async (
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
+                    targetId: { type: Type.STRING },
                     hypothesis: { type: Type.STRING },
-                    molecularTargets: {
+                    docking: {
+                        type: Type.OBJECT,
+                        properties: {
+                            targetName: { type: Type.STRING },
+                            pdbId: { type: Type.STRING },
+                            ligandName: { type: Type.STRING },
+                            bindingEnergy: { type: Type.NUMBER },
+                            activeSiteResidues: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                        }
+                    },
+                    network: {
+                        type: Type.OBJECT,
+                        properties: {
+                            nodes: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        id: { type: Type.STRING },
+                                        group: { type: Type.STRING, enum: ['GENE', 'PROTEIN', 'METABOLITE'] },
+                                        impactScore: { type: Type.NUMBER }
+                                    }
+                                }
+                            },
+                            links: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        source: { type: Type.STRING },
+                                        target: { type: Type.STRING },
+                                        interactionType: { type: Type.STRING, enum: ['ACTIVATION', 'INHIBITION'] }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    literature: {
                         type: Type.ARRAY,
                         items: {
                             type: Type.OBJECT,
                             properties: {
-                                targetName: { type: Type.STRING },
-                                mechanism: { type: Type.STRING },
-                                druggabilityScore: { type: Type.NUMBER },
-                                confidence: { type: Type.NUMBER },
-                                associatedPathway: { type: Type.STRING },
-                                status: { type: Type.STRING, enum: ['NOVEL', 'REPURPOSING', 'KNOWN'] }
+                                title: { type: Type.STRING },
+                                source: { type: Type.STRING },
+                                summary: { type: Type.STRING },
+                                relevanceScore: { type: Type.NUMBER }
                             }
                         }
                     },
-                    correlationMatrix: {
+                    stratification: {
                         type: Type.ARRAY,
                         items: {
                             type: Type.OBJECT,
                             properties: {
-                                x: { type: Type.STRING },
-                                y: { type: Type.STRING },
-                                value: { type: Type.NUMBER },
-                                significance: { type: Type.NUMBER }
+                                population: { type: Type.STRING },
+                                alleleFrequency: { type: Type.NUMBER },
+                                predictedEfficacy: { type: Type.NUMBER }
                             }
                         }
                     },
-                    latentSpaceInsight: { type: Type.STRING }
+                    convergenceInsight: { type: Type.STRING }
                 }
             }
         }
@@ -373,5 +392,5 @@ export const analyzeDiscoveryData = async (
     if (!response.text) throw new Error("No response from Gemini R&D Module");
 
     await yieldToMain();
-    return cleanAndParseJSON(response.text) as DiscoveryAnalysisResult;
+    return cleanAndParseJSON(response.text) as SandboxResult;
 };
