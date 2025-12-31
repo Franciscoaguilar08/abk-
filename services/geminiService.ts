@@ -12,6 +12,22 @@ const modelId = "gemini-3-pro-preview";
  */
 const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
+/**
+ * Helper to safely parse JSON from AI response.
+ * Handles markdown code blocks and logs errors.
+ */
+const cleanAndParseJSON = (text: string) => {
+  try {
+    // Remove markdown code blocks if present (e.g. ```json ... ```)
+    let cleaned = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error("JSON Parse Error. Raw Text length:", text.length);
+    // console.debug("Raw Text:", text); // Uncomment for deep debugging
+    throw new Error("Failed to parse AI response. The analysis may have been interrupted or is too large. Please try a smaller dataset.");
+  }
+};
+
 // --- STEP 1: PARSE RAW TEXT TO IDENTIFY VARIANTS ---
 const extractVariantsPrompt = async (input: string) => {
     const prompt = `
@@ -44,7 +60,7 @@ const extractVariantsPrompt = async (input: string) => {
     try {
         if(!response.text) return [];
         await yieldToMain();
-        return JSON.parse(response.text) as { rsId: string, gene: string }[];
+        return cleanAndParseJSON(response.text) as { rsId: string, gene: string }[];
     } catch(e) {
         console.error("Extraction failed", e);
         return [];
@@ -117,6 +133,7 @@ export const analyzeGenomicData = async (
     config: {
       systemInstruction: systemInstruction,
       responseMimeType: "application/json",
+      maxOutputTokens: 8192, // Ensure enough budget for large JSON
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -245,7 +262,7 @@ export const analyzeGenomicData = async (
   if (!response.text) throw new Error("No response from Gemini");
 
   await yieldToMain();
-  const parsed = JSON.parse(response.text);
+  const parsed = cleanAndParseJSON(response.text);
   
   return {
       patientSummary: parsed.patientSummary,
@@ -316,6 +333,7 @@ export const analyzeDiscoveryData = async (
         config: {
             systemInstruction: systemInstruction,
             responseMimeType: "application/json",
+            maxOutputTokens: 8192,
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
@@ -355,5 +373,5 @@ export const analyzeDiscoveryData = async (
     if (!response.text) throw new Error("No response from Gemini R&D Module");
 
     await yieldToMain();
-    return JSON.parse(response.text) as DiscoveryAnalysisResult;
+    return cleanAndParseJSON(response.text) as DiscoveryAnalysisResult;
 };
