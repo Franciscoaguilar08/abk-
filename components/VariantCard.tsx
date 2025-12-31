@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { VariantAnalysis, VariantRiskLevel, AttentionPoint } from '../types';
-import { Info, CheckCircle2, Globe, BrainCircuit, Microscope, Sparkles } from 'lucide-react';
+import { Info, CheckCircle2, Globe, BrainCircuit, Microscope, Sparkles, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { ProteinViewer } from './ProteinViewer';
 
 interface VariantCardProps {
@@ -11,7 +12,7 @@ const getRiskColor = (level: VariantRiskLevel) => {
   switch (level) {
     case VariantRiskLevel.PATHOGENIC:
     case VariantRiskLevel.HIGH:
-      return 'bg-red-500/10 text-red-400 border-red-500/20';
+      return 'bg-red-500/10 text-red-400 border-red-500/30';
     case VariantRiskLevel.MODERATE:
       return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
     case VariantRiskLevel.UNCERTAIN:
@@ -28,21 +29,44 @@ export const VariantCard: React.FC<VariantCardProps> = ({ variant }) => {
   const clinVarText = variant.clinVarSignificance || "Not Reported";
   const xai = variant.xai;
 
+  const isHighRisk = variant.riskLevel === VariantRiskLevel.HIGH || variant.riskLevel === VariantRiskLevel.PATHOGENIC;
+
   return (
-    <div className="glass-panel rounded-xl p-6 transition-all hover:bg-slate-800/50 hover:shadow-lg hover:shadow-violet-900/10 flex flex-col h-full group border-l-2 border-l-transparent hover:border-l-violet-500 relative overflow-hidden">
+    <div className={`glass-panel rounded-xl p-6 transition-all hover:bg-slate-800/50 flex flex-col h-full group border-l-4 relative overflow-hidden ${
+        isHighRisk 
+        ? 'border-l-red-500 shadow-[0_0_30px_rgba(239,68,68,0.15)] bg-red-900/5' 
+        : 'border-l-transparent hover:border-l-violet-500 hover:shadow-lg hover:shadow-violet-900/10'
+    }`}>
       
       {/* Background decoration for High Risk */}
-      {xai && xai.pathogenicityScore > 0.8 && (
+      {isHighRisk && (
+          <>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 blur-[50px] pointer-events-none rounded-full -translate-y-1/2 translate-x-1/2 animate-pulse"></div>
+            <div className="absolute inset-0 border border-red-500/10 rounded-xl pointer-events-none"></div>
+          </>
+      )}
+
+      {/* Standard XAI decoration (if not already high risk to avoid clutter) */}
+      {!isHighRisk && xai && xai.pathogenicityScore > 0.8 && (
           <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/5 blur-[100px] pointer-events-none rounded-full -translate-y-1/2 translate-x-1/2"></div>
       )}
 
       <div className="flex justify-between items-start mb-4 relative z-10">
         <div>
-          <h3 className="text-xl font-bold text-white tracking-tight break-all">{variant.gene}</h3>
+          <h3 className="text-xl font-bold text-white tracking-tight break-all flex items-center gap-2">
+             {variant.gene}
+             {isHighRisk && (
+                 <span className="relative flex h-3 w-3" title="Critical Variant">
+                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                   <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                 </span>
+             )}
+          </h3>
           <p className="text-sm text-violet-400 font-mono break-all">{variant.variant} {variant.rsId && <span className="text-slate-500 text-xs">({variant.rsId})</span>}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
-            <span className={`px-3 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider border ${getRiskColor(variant.riskLevel)} whitespace-nowrap ml-2 shrink-0`}>
+            <span className={`px-3 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider border ${getRiskColor(variant.riskLevel)} whitespace-nowrap ml-2 shrink-0 flex items-center gap-1.5 shadow-sm`}>
+                {isHighRisk && <AlertOctagon className="w-3 h-3 animate-pulse" />}
                 {variant.riskLevel}
             </span>
         </div>

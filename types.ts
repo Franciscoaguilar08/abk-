@@ -123,5 +123,30 @@ export interface AnalysisResult {
   phenotypeTraits: PhenotypeTrait[];
   overallRiskScore: number; 
   equityAnalysis?: EquityAnalysis; 
-  nDimensionalAnalysis?: NDimensionalAnalysis; // New N-Dim Layer
+  nDimensionalAnalysis?: NDimensionalAnalysis; 
+}
+
+// === MODULE B: R&D DISCOVERY TYPES ===
+
+export interface MolecularTarget {
+  targetName: string; // e.g., "EGFR", "JAK2"
+  mechanism: string; // e.g., "Tyrosine Kinase Inhibitor"
+  druggabilityScore: number; // 0.0 - 1.0 (Systems Biology metric)
+  confidence: number; // AI Confidence
+  associatedPathway: string;
+  status: 'NOVEL' | 'REPURPOSING' | 'KNOWN';
+}
+
+export interface CorrelationPoint {
+  x: string; // Variable A (e.g., Gene Expression)
+  y: string; // Variable B (e.g., Variant Impact)
+  value: number; // -1.0 to 1.0 (Pearson/Spearman correlation)
+  significance: number; // p-value simulation
+}
+
+export interface DiscoveryAnalysisResult {
+  hypothesis: string;
+  molecularTargets: MolecularTarget[];
+  correlationMatrix: CorrelationPoint[];
+  latentSpaceInsight: string;
 }

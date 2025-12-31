@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup } from "../types";
+import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup, DiscoveryAnalysisResult } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -43,7 +43,6 @@ const extractVariantsPrompt = async (input: string) => {
     
     try {
         if(!response.text) return [];
-        // Yield before parsing potentially large JSON
         await yieldToMain();
         return JSON.parse(response.text) as { rsId: string, gene: string }[];
     } catch(e) {
@@ -52,7 +51,7 @@ const extractVariantsPrompt = async (input: string) => {
     }
 };
 
-// --- STEP 3: FINAL SYNTHESIS WITH REAL DATA ---
+// --- MODULE A: CLINICAL ANALYSIS ---
 export const analyzeGenomicData = async (
   genomicInput: string, 
   focusList: AnalysisFocus[] = ['COMPREHENSIVE'],
@@ -60,27 +59,22 @@ export const analyzeGenomicData = async (
   onStatusUpdate?: (status: string) => void
 ): Promise<AnalysisResult> => {
 
-  // 1. Extraction Phase
   if(onStatusUpdate) onStatusUpdate("Parsing input for variant identifiers...");
-  await yieldToMain(); // Allow UI to render the status change
+  await yieldToMain();
   
   const extractedVariants = await extractVariantsPrompt(genomicInput);
   
-  // 2. Real Data Fetching Phase
   if(onStatusUpdate) onStatusUpdate("Querying MyVariant.info, ClinVar & gnomAD...");
   await yieldToMain();
 
   const rsIds = extractedVariants.map(v => v.rsId).filter(id => id && id.startsWith('rs'));
   
-  // Fetch real data
   const realDataMap = new Map();
   if (rsIds.length > 0) {
       const realDataResults = await batchFetchVariantData(rsIds);
       realDataResults.forEach(d => realDataMap.set(d.rsId, d));
   }
 
-  // 3. Construct Context for Gemini
-  // Heavy string mapping operation - yield first
   await yieldToMain();
   
   const realDataContext = extractedVariants.map(v => {
@@ -102,40 +96,18 @@ export const analyzeGenomicData = async (
   }).join("\n---\n");
 
   if(onStatusUpdate) onStatusUpdate("Running N-Dimensional Convergence Neural Net...");
-  // CRITICAL YIELD: Maintained to fix the "freeze" during heavy processing, 
-  // but removed the artificial 50ms delay for the animation that was removed.
   await yieldToMain();
 
-  // 4. Final Prompt
   const systemInstruction = `
-    You are ABK Genomics AI, a scientific Clinical Decision Support engine linked to simulated EHR data.
-    
-    INPUT CONTEXT:
-    You have REAL-TIME API DATA. Use it exactly.
-    
-    TASK 1: PHARMACOGENOMICS "PRE-PRESCRIPTION" (CPIC)
-    - If pharmacogenes (CYP2D6, CYP2C19, SLCO1B1, etc.) are present, define the Metabolizer Status.
-    - CRITICAL: List SPECIFIC drugs that should be flagged in an EHR *before* prescription (e.g., "Alert: Do not prescribe Codeine", "Alert: Reduce Warfarin dose").
-    - Cite CPIC guidelines logic implicitly.
-
-    TASK 2: N-DIMENSIONAL CONVERGENCE (The "Hidden" Biomarker)
-    - Don't just list variants. Perform a "Multi-Omics" convergence.
-    - Combine: [Ancestry: ${ancestry}] + [Variants Identified] + [Metabolic Status].
-    - Output a "Composite Biomarker" (e.g., "Cardio-Inflammatory Susceptibility" or "Neuro-Metabolic Resistance").
-    - Generate a network of nodes (Genes, Clinical Factors) and links to visualize this convergence.
-
-    TASK 3: BIOPHYSICAL XAI & 3D
-    - Explain *why* variants are pathogenic using structural biology logic.
-    - Identify PDB IDs.
-
+    You are ABK Genomics AI (Clinical Module).
+    Use the provided Real-Time API Data.
+    Tasks: Pharmacogenomics (CPIC), N-Dimensional Convergence (Multi-omics implication), and Biophysical XAI.
     Return valid JSON.
   `;
 
   const prompt = `
     Analyze these variants based on the fetched API data below:
-    
     ${realDataContext}
-    
     Original Input Snippet: ${genomicInput.substring(0, 200)}
   `;
 
@@ -270,15 +242,11 @@ export const analyzeGenomicData = async (
     }
   });
 
-  if (!response.text) {
-    throw new Error("No response from Gemini");
-  }
+  if (!response.text) throw new Error("No response from Gemini");
 
-  // Final yield before parsing output
   await yieldToMain();
   const parsed = JSON.parse(response.text);
   
-  // Map Parsed Data to Types (ensuring defaults)
   return {
       patientSummary: parsed.patientSummary,
       overallRiskScore: parsed.overallRiskScore || 0,
@@ -293,4 +261,99 @@ export const analyzeGenomicData = async (
       oncologyProfiles: parsed.oncologyProfiles || [],
       phenotypeTraits: parsed.phenotypeTraits || []
   } as AnalysisResult;
+};
+
+// --- MODULE B: R&D DISCOVERY ANALYSIS ---
+export const analyzeDiscoveryData = async (
+    genomics: string,
+    proteomics: string,
+    imagingMeta: string,
+    onStatusUpdate?: (status: string) => void
+): Promise<DiscoveryAnalysisResult> => {
+    
+    if(onStatusUpdate) onStatusUpdate("Ingesting Multi-Omic Data Streams...");
+    await yieldToMain();
+
+    const systemInstruction = `
+      You are ABK Genomics R&D (Discovery Module).
+      Your goal is MOLECULAR TARGET DISCOVERY for Pharmaceutical Development.
+      
+      INPUT:
+      1. Genomics (VCF/Sequence)
+      2. Proteomics (Expression Levels)
+      3. Imaging Metadata (Cell morphology/Radiomics)
+
+      METHODOLOGY:
+      - Use "Latent Pattern Recognition" to find non-linear correlations between Gene Variants and Protein Expression.
+      - Identify "Druggable Targets" (Proteins/Genes) that are driving the disease state described or implied.
+      - Use Systems Biology principles (Pathway Analysis, PPI Networks).
+
+      OUTPUT:
+      - List of Molecular Targets with Druggability Score (0-1).
+      - Correlation Matrix (Heatmap data) showing relationships between specific Genes and Phenotypes.
+      - A hypothesis summary.
+    `;
+
+    const prompt = `
+      Analyze the following Multi-Omics Dataset:
+      
+      [GENOMICS DATA]:
+      ${genomics.substring(0, 3000)}
+
+      [PROTEOMICS DATA]:
+      ${proteomics.substring(0, 3000)}
+
+      [IMAGING METADATA]:
+      ${imagingMeta.substring(0, 1000)}
+    `;
+
+    if(onStatusUpdate) onStatusUpdate("Calculating Latent Space Correlations...");
+    await yieldToMain();
+
+    const response = await ai.models.generateContent({
+        model: modelId,
+        contents: prompt,
+        config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    hypothesis: { type: Type.STRING },
+                    molecularTargets: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                targetName: { type: Type.STRING },
+                                mechanism: { type: Type.STRING },
+                                druggabilityScore: { type: Type.NUMBER },
+                                confidence: { type: Type.NUMBER },
+                                associatedPathway: { type: Type.STRING },
+                                status: { type: Type.STRING, enum: ['NOVEL', 'REPURPOSING', 'KNOWN'] }
+                            }
+                        }
+                    },
+                    correlationMatrix: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                x: { type: Type.STRING },
+                                y: { type: Type.STRING },
+                                value: { type: Type.NUMBER },
+                                significance: { type: Type.NUMBER }
+                            }
+                        }
+                    },
+                    latentSpaceInsight: { type: Type.STRING }
+                }
+            }
+        }
+    });
+
+    if (!response.text) throw new Error("No response from Gemini R&D Module");
+
+    await yieldToMain();
+    return JSON.parse(response.text) as DiscoveryAnalysisResult;
 };
