@@ -38,6 +38,19 @@
         -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
+
+      /* SCI-FI BUTTON ANIMATIONS */
+      @keyframes rotate-hue {
+        to {
+          filter: hue-rotate(1turn);
+        }
+      }
+      
+      /* Subtle breathing animation for app background */
+      @keyframes breathe {
+        0%, 100% { opacity: 0.3; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.05); }
+      }
     </style>
   <script type="importmap">
 {

@@ -1,128 +1,97 @@
-import React, { useEffect, useState } from 'react';
-import { Dna, ArrowRight, Fingerprint } from 'lucide-react';
+import React from 'react';
+import { Dna, Fingerprint, Activity } from 'lucide-react';
+import { SciFiButton } from './SciFiButton';
+import { BioBackground } from './BioBackground';
 
 interface LandingPageProps {
   onEnter: () => void;
 }
 
-interface Particle {
-  id: number;
-  char: string;
-  x: number;
-  y: number;
-  size: number;
-  duration: number;
-  delay: number;
-  opacity: number;
-  color: string;
-}
-
 export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
-  const [particles, setParticles] = useState<Particle[]>([]);
-
-  useEffect(() => {
-    const chars = ['A', 'T', 'C', 'G'];
-    const colors = ['text-violet-500', 'text-cyan-500', 'text-emerald-500', 'text-rose-500'];
-    const count = 40; // Number of floating nucleotides
-    const newParticles: Particle[] = [];
-
-    for (let i = 0; i < count; i++) {
-      newParticles.push({
-        id: i,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        x: Math.random() * 100, // %
-        y: Math.random() * 100, // %
-        size: Math.random() * 20 + 10, // px
-        duration: Math.random() * 20 + 10, // seconds
-        delay: Math.random() * -20, // start at random times
-        opacity: Math.random() * 0.5 + 0.1,
-        color: colors[Math.floor(Math.random() * colors.length)],
-      });
-    }
-    setParticles(newParticles);
-  }, []);
-
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#020617] flex flex-col items-center justify-center font-inter selection:bg-violet-500 selection:text-white">
       
-      {/* Dynamic Background Layer */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {/* Gradients */}
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-violet-900/20 rounded-full blur-[120px] animate-pulse"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-cyan-900/10 rounded-full blur-[120px]"></div>
-        
-        {/* Floating Nucleotides */}
-        {particles.map((p) => (
-          <div
-            key={p.id}
-            className={`absolute font-mono font-bold ${p.color} select-none animate-float`}
-            style={{
-              left: `${p.x}%`,
-              top: `${p.y}%`,
-              fontSize: `${p.size}px`,
-              opacity: p.opacity,
-              animationDuration: `${p.duration}s`,
-              animationDelay: `${p.delay}s`,
-            }}
-          >
-            {p.char}
-          </div>
-        ))}
-      </div>
+      {/* Shared Dynamic Background - Active Mode */}
+      <BioBackground variant="landing" />
 
       {/* Main Content */}
-      <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+      <div className="relative z-20 text-center px-4 max-w-5xl mx-auto flex flex-col items-center">
         
-        {/* Logo/Icon Container */}
-        <div className="mb-8 relative inline-block group">
-            <div className="absolute inset-0 bg-violet-500/30 blur-2xl rounded-full group-hover:bg-violet-500/50 transition-all duration-700"></div>
-            <div className="relative w-24 h-24 bg-slate-950/80 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center shadow-2xl">
-                <Dna className="w-12 h-12 text-violet-400 animate-[spin_10s_linear_infinite]" />
-            </div>
-            <div className="absolute -bottom-2 -right-2 bg-slate-900 border border-slate-700 p-2 rounded-lg">
-                <Fingerprint className="w-5 h-5 text-emerald-400" />
+        {/* Holographic Logo Container */}
+        <div className="mb-10 relative group perspective-[1000px]">
+            <div className="absolute inset-0 bg-violet-600/30 blur-[60px] rounded-full group-hover:bg-violet-500/50 transition-all duration-700"></div>
+            
+            <div className="relative w-32 h-32 bg-slate-950/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(139,92,246,0.3)] transition-transform duration-500 group-hover:scale-110 group-hover:rotate-y-12">
+                {/* Rotating Rings */}
+                <div className="absolute inset-0 border border-cyan-500/30 rounded-full animate-[spin-slow_10s_linear_infinite]"></div>
+                <div className="absolute inset-2 border border-violet-500/30 rounded-full animate-[spin-slow_15s_linear_infinite_reverse]"></div>
+                
+                <Dna className="w-14 h-14 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+                
+                <div className="absolute -bottom-2 -right-2 bg-black border border-emerald-500/50 p-2 rounded-lg shadow-lg">
+                    <Fingerprint className="w-6 h-6 text-emerald-400" />
+                </div>
             </div>
         </div>
 
         {/* Text */}
-        <h1 className="text-6xl md:text-8xl font-bold text-white mb-6 tracking-tight font-brand">
-          ABK <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-indigo-400">Genomics</span>
-        </h1>
-        
-        <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-12 font-light leading-relaxed">
-          The next generation of <strong className="text-slate-200 font-medium">Precision Medicine</strong>. 
-          Analyze your genetic twin, predict phenotypic traits, and discover personalized oncological insights using advanced AI.
-        </p>
+        <div className="space-y-6 mb-12">
+             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/80 border border-violet-500/30 backdrop-blur-sm shadow-lg">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-mono text-emerald-300 tracking-widest uppercase">System Online</span>
+             </div>
 
-        {/* CTA Button */}
-        <button 
-          onClick={onEnter}
-          className="group relative px-8 py-4 bg-white text-slate-950 rounded-full font-bold text-sm uppercase tracking-widest overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)]"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-violet-200 to-cyan-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <div className="relative flex items-center gap-3">
-             <span>Initialize System</span>
-             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </button>
+            <h1 className="text-6xl md:text-8xl font-bold text-white tracking-tighter font-brand drop-shadow-2xl">
+              ABK <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-cyan-400 to-emerald-400 animate-gradient-x">GENOMICS</span>
+            </h1>
+            
+            <p className="text-slate-300 text-lg md:text-2xl max-w-3xl mx-auto font-light leading-relaxed">
+              Activate your <strong className="text-white font-medium border-b border-cyan-500/50 pb-0.5">Digital Twin</strong>. 
+              Real-time structural mapping and biophysical AI analysis.
+            </p>
+        </div>
+
+        {/* Sci-Fi Button */}
+        <div className="transform transition-transform hover:scale-105 duration-300">
+            <SciFiButton onClick={onEnter} className="text-lg">
+                INITIALIZE SYSTEM
+                <Activity className="w-5 h-5 animate-pulse" />
+            </SciFiButton>
+        </div>
         
-        <div className="mt-12 flex justify-center gap-8 text-[10px] text-slate-600 font-mono uppercase tracking-widest">
-            <span>v3.1 Pro</span>
-            <span>GRCh38 Reference</span>
-            <span>Secure Environment</span>
+        {/* Footer Metrics */}
+        <div className="mt-20 grid grid-cols-3 gap-8 md:gap-16 border-t border-white/5 pt-8 text-slate-500 font-mono text-xs uppercase tracking-[0.2em]">
+            <div className="flex flex-col gap-1 items-center">
+                <span className="text-violet-400 font-bold text-lg">3B+</span>
+                <span>Base Pairs</span>
+            </div>
+            <div className="flex flex-col gap-1 items-center">
+                <span className="text-cyan-400 font-bold text-lg">0ms</span>
+                <span>Latency</span>
+            </div>
+            <div className="flex flex-col gap-1 items-center">
+                <span className="text-emerald-400 font-bold text-lg">100%</span>
+                <span>Secure</span>
+            </div>
         </div>
       </div>
 
       <style>{`
-        @keyframes float {
-          0% { transform: translateY(0) rotate(0deg); }
-          33% { transform: translateY(-30px) rotate(10deg); }
-          66% { transform: translateY(20px) rotate(-5deg); }
-          100% { transform: translateY(0) rotate(0deg); }
+        @keyframes spin-slow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
-        .animate-float {
-          animation-timing-function: ease-in-out;
-          animation-iteration-count: infinite;
+        .animate-gradient-x {
+            background-size: 200% 200%;
+            animation: gradient-move 3s ease infinite;
+        }
+        @keyframes gradient-move {
+            0% { background-position: 0% 50% }
+            50% { background-position: 100% 50% }
+            100% { background-position: 0% 50% }
         }
       `}</style>
     </div>

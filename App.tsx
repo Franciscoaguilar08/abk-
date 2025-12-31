@@ -8,6 +8,8 @@ import { PhenotypeCard } from './components/PhenotypeCard';
 import { AncestryCard } from './components/AncestryCard';
 import { LandingPage } from './components/LandingPage';
 import { RiskDistributionChart, OncologyRiskBarChart } from './components/Charts';
+import { SciFiButton } from './components/SciFiButton';
+import { BioBackground } from './components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Zap, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
@@ -151,17 +153,16 @@ const App: React.FC = () => {
   }
   
   return (
-    <div className="min-h-screen pb-20 selection:bg-violet-500 selection:text-white font-inter bg-[#020617] text-slate-100 animate-fade-in flex flex-col">
+    <div className="min-h-screen pb-20 selection:bg-violet-500 selection:text-white font-inter bg-[#020617] text-slate-100 animate-fade-in flex flex-col relative overflow-hidden">
       
-      {/* Dynamic Background */}
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
-          <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] bg-violet-900/10 rounded-full blur-[120px] animate-[pulse_8s_ease-in-out_infinite]"></div>
-          <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-cyan-900/10 rounded-full blur-[100px] animate-[pulse_10s_ease-in-out_infinite_reverse]"></div>
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04]"></div>
-      </div>
+      {/* 
+          === NEW APP BACKGROUND (SUBTLE MODE) === 
+          Shared component for consistency, but calmer.
+      */}
+      <BioBackground variant="app" />
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-[#020617]/80 backdrop-blur-xl border-b border-white/5">
+      <header className="sticky top-0 z-40 bg-[#020617]/70 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setResult(null); }}>
              <div className="relative">
@@ -184,7 +185,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow w-full relative z-10">
         
         {/* === STEP 1: INPUT & ANALYSIS CONFIG === */}
         {!result && !loading && (
@@ -195,7 +196,7 @@ const App: React.FC = () => {
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-900/30 border border-violet-500/30 text-violet-300 text-xs font-bold uppercase tracking-wider">
                             <Zap className="w-3 h-3" /> Real-Time Bioinformatics Engine
                         </div>
-                        <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight leading-none font-brand">
+                        <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight leading-none font-brand drop-shadow-xl">
                             Decode Your <br />
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-fuchsia-400 to-white">Biological Identity</span>
                         </h1>
@@ -358,16 +359,16 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <button 
-                                    onClick={handleAnalyze}
-                                    disabled={!inputData}
-                                    className="mt-6 w-full py-4 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:shadow-[0_0_30px_rgba(124,58,237,0.4)] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none group relative overflow-hidden"
-                                >
-                                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                                    <Zap className="w-4 h-4 fill-current relative z-10" />
-                                    <span className="relative z-10">Generate Analysis</span>
-                                    <ArrowRight className="w-4 h-4 relative z-10 group-hover:translate-x-1 transition-transform" />
-                                </button>
+                                <div className="mt-6">
+                                    <SciFiButton 
+                                        onClick={handleAnalyze} 
+                                        disabled={!inputData}
+                                        className="w-full"
+                                    >
+                                        GENERATE ANALYSIS
+                                        <ArrowRight className="w-5 h-5" />
+                                    </SciFiButton>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -606,7 +607,7 @@ const App: React.FC = () => {
       </main>
 
       {/* Footer Disclaimer */}
-      <footer className="w-full bg-[#020617]/90 border-t border-white/5 py-4">
+      <footer className="w-full bg-[#020617]/90 border-t border-white/5 py-4 relative z-10">
          <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
             <div className="flex items-center gap-2">
                <ShieldCheck className="w-4 h-4 text-emerald-500" />
