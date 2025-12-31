@@ -13,6 +13,7 @@
         font-family: 'Inter', sans-serif;
         background-color: #020617; /* Dark Slate 950 */
         color: #f8fafc;
+        overflow-x: hidden;
       }
       h1, h2, h3, h4, h5, h6, .font-brand {
         font-family: 'Outfit', sans-serif;
@@ -39,30 +40,41 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
 
-      /* SCI-FI BUTTON ANIMATIONS */
+      /* GLOBAL ANIMATIONS */
       @keyframes rotate-hue {
-        to {
-          filter: hue-rotate(1turn);
-        }
+        to { filter: hue-rotate(1turn); }
       }
-      
-      /* Subtle breathing animation for app background */
       @keyframes breathe {
         0%, 100% { opacity: 0.3; transform: scale(1); }
         50% { opacity: 0.5; transform: scale(1.05); }
       }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
+      .animate-fade-in-up { animation: fadeInUp 0.8s ease-out forwards; }
+      
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.475.0",
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "@google/genai": "https://esm.sh/@google/genai",
+    "recharts": "https://esm.sh/recharts@2.10.3?external=react,react-dom",
+    "lucide-react": "https://esm.sh/lucide-react@0.294.0?external=react,react-dom",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.1"
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.1",
+    "framer-motion": "https://esm.sh/framer-motion@10.16.4?external=react,react-dom"
   }
 }
 </script>

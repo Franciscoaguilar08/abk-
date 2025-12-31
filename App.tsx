@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { analyzeGenomicData } from './services/geminiService';
 import { generateClinicalReport } from './services/pdfService';
@@ -508,9 +507,6 @@ const App: React.FC = () => {
                     <div className="min-h-[500px]">
                         {activeTab === 'overview' && (
                             <div className="space-y-6">
-                                {result.nDimensionalAnalysis && (
-                                    <NDimensionalCard analysis={result.nDimensionalAnalysis} />
-                                )}
                                 {result.equityAnalysis && result.equityAnalysis.biasCorrectionApplied && (
                                     <AncestryCard analysis={result.equityAnalysis} />
                                 )}
@@ -556,6 +552,9 @@ const App: React.FC = () => {
                                         <OncologyRiskBarChart profiles={result.oncologyProfiles || []} />
                                     </div>
                                 </div>
+                                {result.nDimensionalAnalysis && (
+                                    <NDimensionalCard analysis={result.nDimensionalAnalysis} />
+                                )}
                             </div>
                         )}
 
