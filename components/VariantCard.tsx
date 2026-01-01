@@ -108,11 +108,11 @@ export const VariantCard: React.FC<VariantCardProps> = ({ variant }) => {
             <div className="flex items-center justify-between mb-4">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                     <Sparkles className="w-3 h-3 text-violet-400" />
-                    Biophysical XAI
+                    Biophysical Engine
                 </h4>
                 <div className="flex items-center gap-1 text-[10px] text-slate-500 border border-slate-700 px-2 py-0.5 rounded-full">
                     <Microscope className="w-3 h-3" />
-                    <span>Real Data</span>
+                    <span>AlphaMissense Logic</span>
                 </div>
             </div>
 

@@ -42,9 +42,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             {/* 2. Headline */}
             <div className="relative mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                 <h1 className="text-5xl md:text-8xl lg:text-9xl font-bold text-white tracking-tighter font-brand leading-[0.9]">
-                  MEDICINA DE <br />
+                  TU GEMELO <br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-b from-cyan-200 via-white to-slate-400 animate-shine relative z-10 drop-shadow-2xl">
-                    PRECISIÓN
+                    DIGITAL
                   </span>
                 </h1>
                 
@@ -57,8 +57,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             {/* 3. Description */}
             <div className="mb-14 max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
                 <p className="text-slate-400 text-sm md:text-lg font-light leading-relaxed">
-                   Plataforma de simulación biológica mediante <span className="text-cyan-200 font-medium border-b border-cyan-500/30 pb-0.5">Gemelo Digital</span>. 
-                   Análisis estructural, farmacogenómica y predicción oncológica en tiempo real.
+                   Plataforma de simulación biológica personalizada. 
+                   Ingresa tu información genética para instanciar tu <span className="text-cyan-200 font-medium border-b border-cyan-500/30 pb-0.5">Gemelo Digital</span> y acceder a predicciones de salud en tiempo real.
                 </p>
             </div>
 
@@ -83,7 +83,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                             
                             <div className="flex flex-col items-start">
                                 <span className="text-white font-bold tracking-[0.15em] text-lg group-hover:text-cyan-100 transition-colors">
-                                    INICIAR ANÁLISIS
+                                    INICIAR SIMULACIÓN
                                 </span>
                                 <span className="text-[10px] font-mono text-slate-500 group-hover:text-cyan-400 transition-colors flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>

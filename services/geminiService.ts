@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
@@ -15,41 +14,51 @@ const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
 /**
  * Helper to safely parse JSON from AI response.
- * Handles markdown code blocks, finding JSON objects within text, and logs errors.
+ * Handles markdown code blocks, finding JSON objects within text, and attempts to repair common JSON errors.
  */
 const cleanAndParseJSON = (text: string) => {
+  // 1. Remove Markdown code blocks
+  let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+  // 2. Find the outermost JSON object or array
+  const firstBrace = clean.indexOf('{');
+  const firstBracket = clean.indexOf('[');
+  
+  let start = -1;
+  let end = -1;
+
+  // Determine if we are looking for an object or array based on which comes first
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      start = firstBrace;
+      end = clean.lastIndexOf('}');
+  } else if (firstBracket !== -1) {
+      start = firstBracket;
+      end = clean.lastIndexOf(']');
+  }
+
+  if (start !== -1 && end !== -1 && end > start) {
+      clean = clean.substring(start, end + 1);
+  }
+
   try {
-    // 1. Remove Markdown code blocks if present
-    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-    // 2. Find the outermost JSON object
-    const firstBrace = clean.indexOf('{');
-    const lastBrace = clean.lastIndexOf('}');
-
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        clean = clean.substring(firstBrace, lastBrace + 1);
-    }
-
-    // 3. Attempt parse
     return JSON.parse(clean);
-
   } catch (e) {
-    console.error("JSON Parse Error. Raw Text length:", text.length);
-    console.debug("Failed Text Preview:", text.substring(0, 200) + "...");
+    console.warn("Initial JSON Parse Failed. Attempting repairs...");
     
-    // Attempt to repair common JSON issues (like unescaped newlines in strings)
     try {
-        const repaired = text.replace(/(?<!\\)\n/g, "\\n");
-        const firstBrace = repaired.indexOf('{');
-        const lastBrace = repaired.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            return JSON.parse(repaired.substring(firstBrace, lastBrace + 1));
-        }
-    } catch (repairError) {
-        console.error("JSON Repair Failed", repairError);
-    }
+        // Repair Strategy: Fix trailing commas (common LLM error)
+        // Regex matches a comma followed by whitespace and a closing brace/bracket
+        let repaired = clean.replace(/,\s*([\]}])/g, '$1');
 
-    throw new Error("Failed to parse AI response. The analysis may have been interrupted or is too large. Please try a smaller dataset.");
+        // Attempt parse again
+        return JSON.parse(repaired);
+
+    } catch (repairErr) {
+        console.error("JSON Parse Error. Raw Text length:", text.length);
+        console.debug("Failed Text Preview:", text.substring(0, 200) + "...");
+        // Throwing the original error message to maintain compatibility with UI error handling
+        throw new Error("Failed to parse AI response. The analysis may have been interrupted or is too large. Please try a smaller dataset.");
+    }
   }
 };
 
@@ -136,23 +145,39 @@ export const analyzeGenomicData = async (
       }
   }).join("\n---\n");
 
-  if(onStatusUpdate) onStatusUpdate("Running Digital Twin Convergence Engine...");
+  if(onStatusUpdate) onStatusUpdate("Running AlphaMissense Logic & Digital Twin Engine...");
   await yieldToMain();
 
   const systemInstruction = `
-    You are ABK Genomics AI (Digital Twin Module).
-    Use the provided Real-Time API Data.
-    Tasks: Pharmacogenomics (CPIC), N-Dimensional Convergence (Multi-omics implication), and Biophysical XAI.
+    You are ABK Genomics Digital Twin Engine, utilizing an AlphaMissense-inspired auditing logic.
     
-    CRITICAL:
-    - Return ONLY valid JSON.
-    - Escape all double quotes inside strings (e.g. \\").
-    - Do not output Markdown formatting if possible, just the JSON.
-    - Be concise in the summary to avoid token limits.
+    Apply the following COMPULSORY OPTIMIZATION PROTOCOL to the analysis:
+
+    1. RIGOR IN CLASSIFICATION:
+       - Do not allow ambiguous answers.
+       - Contrast every missense variant against the scale: Benign vs Pathogenic.
+       - For amino acid changes, you MUST provide a predicted pathogenicity score (0.0 to 1.0) simulating AlphaMissense/DeepMind logic.
+
+    2. BIOPHYSICAL DIAGNOSIS (THE 'WHY'):
+       - Do not just provide a score. Explain the structural reason.
+       - Is there a loss of thermal stability?
+       - Disruption of an evolutionary conserved residue?
+       - Steric clash in the side chain?
+       - Verify if the change occurs in a functional domain (cross-reference UniProt logic).
+
+    3. MATCHING VERIFICATION:
+       - Explicitly state: "AlphaMissense Prediction Match" if the variant aligns with predicted pathogenicity patterns.
+
+    4. ERROR FILTER:
+       - If a variant is STOP-GAIN or FRAMESHIFT, explicitly state that AlphaMissense is NOT the correct tool for this type, but provide standard clinical interpretation.
+
+    5. OUTPUT FORMAT:
+       - Return ONLY valid JSON.
+       - Structure 'xai' fields to reflect this "Scientific Evidence".
   `;
 
   const prompt = `
-    Analyze these variants based on the fetched API data below:
+    Analyze these variants based on the fetched API data below and the AlphaMissense protocol:
     ${realDataContext}
     Original Input Snippet: ${genomicInput.substring(0, 200)}
   `;
@@ -214,8 +239,9 @@ export const analyzeGenomicData = async (
                     type: Type.OBJECT,
                     description: "Biophysical explanation",
                     properties: {
-                        pathogenicityScore: { type: Type.NUMBER, description: "Normalized 0-1 score" },
-                        structuralMechanism: { type: Type.STRING },
+                        pathogenicityScore: { type: Type.NUMBER, description: "Normalized 0-1 score (AlphaMissense logic)" },
+                        structuralMechanism: { type: Type.STRING, description: "The Biophysical 'Why'" },
+                        molecularFunction: { type: Type.STRING },
                         pdbId: { type: Type.STRING },
                         variantPosition: { type: Type.NUMBER },
                         attentionMap: {
@@ -320,23 +346,23 @@ export const analyzeDiscoveryData = async (
     await yieldToMain();
 
     const systemInstruction = `
-      You are ABK Genomics R&D (Discovery Module).
-      Your goal is to simulate a "Sandbox" environment for drug discovery.
+      Act as a Drug Discovery AI (Digital Twin Module).
+      Input: A target (e.g. KRAS).
+      Output: Valid JSON with:
+      1. docking (pdbId, bindingEnergy, activeSiteResidues)
+      2. network (nodes: gene/protein/metabolite, links)
+      3. literature (3 recent citations)
+      4. stratification (population allele freq)
+      5. convergenceInsight (summary)
       
-      INPUT: A Gene or Protein Target (e.g. "EGFR", "KRAS").
-
-      OUTPUT A JSON with 4 distinct modules:
-      1. Ligand Architect: Select a REAL PDB ID (preferably with a ligand) and binding energy data.
-      2. System Perturbation: A small metabolic/signaling network (nodes and links) affected by this target.
-      3. Insight Miner: 3-4 simulated PubMed citations relevant to recent research on this target.
-      4. Stratification Engine: Population allele frequency data for relevant variants of this target.
-
-      Be scientifically accurate with PDB IDs and pathway connections.
+      Constraints:
+      - Keep all IDs concise (max 20 chars).
+      - Do NOT generate repetitive strings (e.g. "Var0000000...").
+      - Use real PDB IDs where possible (e.g. 6OIM).
+      - Return valid JSON only.
     `;
 
-    const prompt = `
-      Generate Innovation Sandbox data for Target: ${targetInput}.
-    `;
+    const prompt = `Generate JSON for Target: ${targetInput}. Ensure IDs are short and valid.`;
 
     if(onStatusUpdate) onStatusUpdate("Simulating Molecular Docking & Network Perturbation...");
     await yieldToMain();
@@ -347,7 +373,7 @@ export const analyzeDiscoveryData = async (
         config: {
             systemInstruction: systemInstruction,
             responseMimeType: "application/json",
-            maxOutputTokens: 8192,
+            maxOutputTokens: 2048, // Prevent runaway loops
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {

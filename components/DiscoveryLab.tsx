@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Network, BookOpen, Globe2, 
-    ArrowRight, Microscope, Maximize2, Minimize2, 
-    Cpu, ShieldCheck, Zap, Activity, Scan, Dna,
-    Share2, Search, Loader2, Database, PlayCircle
+    Microscope, 
+    Cpu, ShieldCheck, Zap, Activity, Dna,
+    Database, PlayCircle, AlertTriangle, Search, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SciFiButton } from './SciFiButton';
@@ -19,36 +19,45 @@ const DEMO_MODELS = [
     { id: 'PSEN1', label: 'PSEN1', category: 'NEUROLOGY', color: 'violet' }
 ];
 
-// --- CUSTOM HOOKS ---
-const useScrambleText = (text: string, active: boolean) => {
-    const [display, setDisplay] = useState(text);
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-    useEffect(() => {
-        if (!active) {
-            setDisplay(text);
-            return;
-        }
-        let iterations = 0;
-        const interval = setInterval(() => {
-            setDisplay(prev => 
-                text.split("").map((letter, index) => {
-                    if (index < iterations) return text[index];
-                    return chars[Math.floor(Math.random() * chars.length)];
-                }).join("")
-            );
-            if (iterations >= text.length) clearInterval(interval);
-            iterations += 1 / 2;
-        }, 30);
-        return () => clearInterval(interval);
-    }, [text, active]);
-
-    return display;
-};
-
-const ScrambleText: React.FC<{ text: string, className?: string }> = ({ text, className }) => {
-    const scrambled = useScrambleText(text, true);
-    return <span className={className}>{scrambled}</span>;
+// --- FALLBACK MOCK DATA (OFFLINE MODE) ---
+const MOCK_SANDBOX_RESULT: SandboxResult = {
+    targetId: "MOCK-KRAS-G12C",
+    hypothesis: "G12C mutation locks KRAS in an active state, driving oncogenesis. Covalent inhibitors targeting Cys12 can lock it in an inactive GDP-bound state.",
+    docking: {
+        targetName: "KRAS G12C",
+        pdbId: "6OIM", // Valid KRAS structure
+        ligandName: "AMG-510 (Sotorasib)",
+        bindingEnergy: -11.5,
+        activeSiteResidues: [12, 68, 95]
+    },
+    network: {
+        nodes: [
+            { id: "KRAS", group: "PROTEIN", impactScore: 1.0 },
+            { id: "RAF1", group: "PROTEIN", impactScore: 0.9 },
+            { id: "MEK", group: "PROTEIN", impactScore: 0.8 },
+            { id: "ERK", group: "PROTEIN", impactScore: 0.8 },
+            { id: "PI3K", group: "PROTEIN", impactScore: 0.7 },
+            { id: "Growth_Signal", group: "METABOLITE", impactScore: 0.6 }
+        ],
+        links: [
+            { source: "Growth_Signal", target: "KRAS", interactionType: "ACTIVATION" },
+            { source: "KRAS", target: "RAF1", interactionType: "ACTIVATION" },
+            { source: "RAF1", target: "MEK", interactionType: "ACTIVATION" },
+            { source: "MEK", target: "ERK", interactionType: "ACTIVATION" },
+            { source: "KRAS", target: "PI3K", interactionType: "ACTIVATION" }
+        ]
+    },
+    literature: [
+        { title: "Kras G12C Inhibition", source: "Nature, 2019", summary: "Discovery of a covalent inhibitor that traps KRAS G12C in an inactive state.", relevanceScore: 98 },
+        { title: "Resistance Mechanisms", source: "NEJM, 2021", summary: "Acquired resistance to KRAS G12C inhibitors via RTK feedback loops.", relevanceScore: 85 },
+        { title: "Structural Dynamics", source: "Science, 2020", summary: "Crystal structures reveal the cryptic pocket used by switch-II pocket inhibitors.", relevanceScore: 92 }
+    ],
+    stratification: [
+        { population: "NSCLC (Smokers)", alleleFrequency: 13.0, predictedEfficacy: 85 },
+        { population: "Colorectal Cancer", alleleFrequency: 3.0, predictedEfficacy: 40 },
+        { population: "Pancreatic Cancer", alleleFrequency: 1.5, predictedEfficacy: 55 }
+    ],
+    convergenceInsight: "Convergence of structural vulnerability (Cys12) and high clinical prevalence in NSCLC suggests high priority for covalent inhibitor development, though resistance pathways (PI3K) require combo therapy."
 };
 
 // --- MAIN COMPONENT ---
@@ -58,6 +67,7 @@ export const DiscoveryLab: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState("");
     const [result, setResult] = useState<SandboxResult | null>(null);
+    const [isOfflineMode, setIsOfflineMode] = useState(false);
 
     const handleRunSimulation = async (overrideInput?: string) => {
         const inputToUse = overrideInput || targetInput;
@@ -65,20 +75,47 @@ export const DiscoveryLab: React.FC = () => {
         
         if (overrideInput) setTargetInput(overrideInput);
 
+        // Reset State
         setLoading(true);
-        setResult(null); // Clear previous to show scanning effect
+        setResult(null); 
+        setIsOfflineMode(false);
+        setStatus("INITIALIZING PROTOCOL...");
+
         try {
+            // Attempt Real API Call
             const res = await analyzeDiscoveryData(inputToUse, setStatus);
-            setResult(res);
+            
+            if (res) {
+                setResult(res);
+                setLoading(false); // Success: Stop loading here
+            } else {
+                throw new Error("Empty response from AI");
+            }
+
         } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
+            console.warn("Simulation API failed, switching to offline fallback", e);
+            setStatus("CONNECTION ERROR. ENGAGING OFFLINE SIMULATION...");
+            
+            // Artificial delay to show the error status before switching to fallback
+            // This ensures the user sees something is happening even if the API fails
+            setTimeout(() => {
+                const fallbackData = {
+                    ...MOCK_SANDBOX_RESULT,
+                    targetId: inputToUse.toUpperCase(),
+                    docking: { ...MOCK_SANDBOX_RESULT.docking, targetName: inputToUse.toUpperCase() }
+                };
+                setResult(fallbackData);
+                setIsOfflineMode(true);
+                setLoading(false); // Fallback: Stop loading here (INSIDE timeout)
+            }, 2000);
         }
+        // CRITICAL FIX: Removed 'finally' block. 
+        // Previously, 'finally' ran immediately after 'catch', setting loading=false 
+        // BEFORE the timeout executed, causing the UI to flash and reset to standby.
     };
 
     return (
-        <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6 text-slate-200 font-sans">
+        <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6 text-slate-200 font-sans animate-fade-in">
             
             {/* 1. HEADER & SEARCH CORE */}
             <div className="relative z-10 bg-[#020617]/80 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-2xl">
@@ -101,7 +138,7 @@ export const DiscoveryLab: React.FC = () => {
                                 value={targetInput}
                                 onChange={(e) => setTargetInput(e.target.value)}
                                 placeholder="ENTER GENE OR PROTEIN ID (e.g. KRAS)"
-                                className="relative w-full h-12 bg-[#0a0a0a] border border-slate-700 text-white rounded-lg px-4 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none font-mono text-sm uppercase tracking-wider placeholder:text-slate-600"
+                                className="relative w-full h-12 bg-[#0a0a0a] border border-slate-700 text-white rounded-lg px-4 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none font-mono text-sm uppercase tracking-wider placeholder:text-slate-600 transition-all"
                                 onKeyDown={(e) => e.key === 'Enter' && handleRunSimulation()}
                              />
                          </div>
@@ -119,7 +156,6 @@ export const DiscoveryLab: React.FC = () => {
                      </div>
                      <div className="flex flex-wrap gap-2">
                         {DEMO_MODELS.map((demo) => {
-                            // Dynamic color mapping for button styles
                             const colorStyles: any = {
                                 rose: 'border-rose-500/30 text-rose-400 hover:bg-rose-900/20',
                                 cyan: 'border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/20',
@@ -145,6 +181,19 @@ export const DiscoveryLab: React.FC = () => {
                  </div>
             </div>
 
+            {/* OFFLINE MODE INDICATOR */}
+            {isOfflineMode && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-center gap-3 animate-fade-in-up">
+                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    <div>
+                        <h4 className="text-amber-400 text-xs font-bold uppercase">Simulation Mode: Offline/Fallback</h4>
+                        <p className="text-amber-200/70 text-[10px]">
+                            Unable to connect to Gemini AI (API Key missing or Network Error). Displaying high-fidelity projection data for demonstration.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* 2. THE GRID (4 CARDS) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px]">
                 
@@ -154,26 +203,29 @@ export const DiscoveryLab: React.FC = () => {
                     icon={Box} 
                     color="violet"
                     loading={loading}
-                    status={loading ? "DOCKING SIMULATION..." : (result ? "MODEL RENDERED" : "STANDBY")}
+                    status={loading ? "DOCKING SIMULATION..." : (result && result.docking && result.docking.pdbId ? "MODEL RENDERED" : "STANDBY")}
                 >
-                    {result ? (
-                        <div className="h-full flex flex-col">
+                    {result && !loading && result.docking && result.docking.pdbId ? (
+                        <div className="h-full flex flex-col animate-fade-in">
                             <div className="relative flex-grow rounded-lg overflow-hidden border border-slate-800 bg-black shadow-inner min-h-[300px]">
-                                <ProteinViewer pdbId={result.docking.pdbId} highlightPosition={result.docking.activeSiteResidues[0]} />
+                                <ProteinViewer 
+                                    pdbId={result.docking.pdbId} 
+                                    highlightPosition={result.docking.activeSiteResidues?.[0]} 
+                                />
                                 {/* Overlay Metrics */}
                                 <div className="absolute top-4 left-4 z-20">
                                     <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Target Structure</div>
-                                    <div className="text-2xl font-mono text-white font-bold">{result.docking.pdbId}</div>
+                                    <div className="text-2xl font-mono text-white font-bold">{result.docking.pdbId || "N/A"}</div>
                                 </div>
                                 <div className="absolute bottom-4 right-4 z-20 text-right">
                                     <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Binding Energy</div>
-                                    <div className="text-xl font-mono text-emerald-400 font-bold">{result.docking.bindingEnergy} kcal/mol</div>
+                                    <div className="text-xl font-mono text-emerald-400 font-bold">{result.docking.bindingEnergy || 0} kcal/mol</div>
                                 </div>
                             </div>
                             <div className="mt-4 flex items-center justify-between text-xs font-mono text-slate-500">
                                 <div className="flex items-center gap-2">
                                     <Cpu className="w-4 h-4 text-violet-500" />
-                                    <span>Active Sites: {result.docking.activeSiteResidues.join(', ')}</span>
+                                    <span>Active Sites: {result.docking.activeSiteResidues?.join(', ') || "N/A"}</span>
                                 </div>
                                 <div className="px-2 py-1 bg-violet-900/20 text-violet-300 rounded border border-violet-500/20">
                                     LIGAND: {result.docking.ligandName || "N/A"}
@@ -191,13 +243,13 @@ export const DiscoveryLab: React.FC = () => {
                     icon={Network} 
                     color="cyan"
                     loading={loading}
-                    status={loading ? "TRACING PATHWAYS..." : (result ? "NETWORK ACTIVE" : "STANDBY")}
+                    status={loading ? "TRACING PATHWAYS..." : (result && result.network ? "NETWORK ACTIVE" : "STANDBY")}
                 >
-                    {result ? (
-                        <div className="h-full flex flex-col">
+                    {result && !loading && result.network ? (
+                        <div className="h-full flex flex-col animate-fade-in">
                             <div className="flex-grow bg-[#020202] rounded-lg border border-slate-800 relative overflow-hidden flex items-center justify-center min-h-[300px] group">
                                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#22d3ee_1px,transparent_1px)] [background-size:20px_20px]"></div>
-                                <CyberNetworkGraph nodes={result.network.nodes} links={result.network.links} />
+                                <CyberNetworkGraph nodes={result.network.nodes || []} links={result.network.links || []} />
                             </div>
                             <div className="mt-4 flex gap-6 justify-center text-[10px] font-mono uppercase tracking-widest text-slate-500">
                                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_cyan]"></span> Gene</span>
@@ -216,10 +268,10 @@ export const DiscoveryLab: React.FC = () => {
                     icon={BookOpen} 
                     color="amber"
                     loading={loading}
-                    status={loading ? "SEMANTIC SEARCH..." : (result ? `${result.literature.length} SOURCES FOUND` : "STANDBY")}
+                    status={loading ? "SEMANTIC SEARCH..." : (result && result.literature ? `${result.literature.length} SOURCES FOUND` : "STANDBY")}
                 >
-                     {result ? (
-                        <div className="h-full flex flex-col">
+                     {result && !loading && result.literature ? (
+                        <div className="h-full flex flex-col animate-fade-in">
                             <div className="flex-grow space-y-3 overflow-y-auto pr-2 custom-scrollbar max-h-[350px]">
                                 {result.literature.map((paper, idx) => (
                                     <div key={idx} className="bg-[#0a0a0a] p-4 rounded border border-white/5 hover:border-amber-500/50 transition-all group relative overflow-hidden">
@@ -253,10 +305,10 @@ export const DiscoveryLab: React.FC = () => {
                     icon={Globe2} 
                     color="emerald"
                     loading={loading}
-                    status={loading ? "CALCULATING ALLELE FREQ..." : (result ? "POPULATION MAPPED" : "STANDBY")}
+                    status={loading ? "CALCULATING ALLELE FREQ..." : (result && result.stratification ? "POPULATION MAPPED" : "STANDBY")}
                 >
-                    {result ? (
-                        <div className="h-full flex flex-col items-center justify-center relative">
+                    {result && !loading && result.stratification ? (
+                        <div className="h-full flex flex-col items-center justify-center relative animate-fade-in">
                              <div className="absolute top-0 right-0 text-[10px] text-emerald-500/70 font-mono border border-emerald-500/20 px-2 py-0.5 rounded">GNOMAD v4.0</div>
                              
                              <div className="flex-grow flex items-center justify-center w-full">
@@ -283,12 +335,12 @@ export const DiscoveryLab: React.FC = () => {
 
             {/* CONVERGENCE INSIGHT (If Result Exists) */}
             <AnimatePresence>
-                {result && (
+                {result && !loading && result.convergenceInsight && (
                     <motion.div 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
-                        className="bg-gradient-to-r from-violet-900/20 via-cyan-900/20 to-violet-900/20 border border-white/10 rounded-2xl p-8 relative overflow-hidden"
+                        className="bg-gradient-to-r from-violet-900/20 via-cyan-900/20 to-violet-900/20 border border-white/10 rounded-2xl p-8 relative overflow-hidden mt-6"
                     >
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 via-cyan-500 to-violet-500"></div>
                         <div className="flex flex-col md:flex-row gap-8 items-center">
@@ -300,7 +352,7 @@ export const DiscoveryLab: React.FC = () => {
                                      <Zap className="w-4 h-4" /> Convergent Hypothesis
                                  </div>
                                  <h3 className="text-2xl font-brand font-bold text-white mb-2">
-                                     {result.hypothesis}
+                                     {result.hypothesis || "Hypothesis Generated"}
                                  </h3>
                                  <p className="text-slate-300 text-sm leading-relaxed max-w-4xl">
                                      {result.convergenceInsight}
@@ -340,7 +392,7 @@ const SandboxCard: React.FC<{
     };
 
     return (
-        <div className={`bg-[#050505] rounded-xl border ${colors[color]} relative flex flex-col h-[450px] overflow-hidden group`}>
+        <div className={`bg-[#050505] rounded-xl border ${colors[color]} relative flex flex-col h-[450px] overflow-hidden group transition-all duration-300`}>
              {/* Header */}
              <div className="p-4 border-b border-white/5 bg-white/5 backdrop-blur-sm flex justify-between items-center z-10">
                  <div className="flex items-center gap-3">
