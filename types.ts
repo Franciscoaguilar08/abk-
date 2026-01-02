@@ -87,6 +87,7 @@ export interface OncologyProfile {
   predisposition: string;
   riskScore: number; // 0-100
   notes: string;
+  functionalCategory: 'DNA_REPAIR' | 'CELL_CYCLE' | 'METABOLISM' | 'IMMUNITY' | 'UNKNOWN';
 }
 
 export interface PhenotypeTrait {
@@ -105,22 +106,36 @@ export interface EquityAnalysis {
   explanation: string;
 }
 
-// NEW: N-Dimensional Analysis (Convergence)
-export interface NDimensionalAnalysis {
-    compositeBiomarker: string; // e.g. "Inflammo-Metabolic Axis"
-    convergenceScore: number; // 0-100
-    riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-    factors: string[]; // List of genes/factors involved (e.g. ["CYP2D6", "Ancestry", "Inflammation"])
-    clinicalInsight: string; // The "Hidden" insight
-    networkNodes: { id: string, label: string, group: 'GENE' | 'CLINICAL' | 'LIFESTYLE' }[];
-    networkLinks: { source: string, target: string, value: number }[];
+// === NEW: ACTIONABLE CLINICAL INTELLIGENCE ===
+
+export interface ActionItem {
+    title: string;
+    priority: 'IMMEDIATE' | 'HIGH' | 'ROUTINE';
+    description: string;
+    specialistReferral?: string; // e.g. "Cardiologist", "Genetic Counselor"
 }
 
-export interface CorrelationPoint {
-  x: string;
-  y: string;
-  value: number;
-  significance: number;
+export interface LifestyleMod {
+    category: 'DIET' | 'EXERCISE' | 'ENVIRONMENT' | 'SUPPLEMENTS';
+    recommendation: string;
+    impactLevel: 'HIGH' | 'MODERATE';
+}
+
+export interface MonitoringProtocol {
+    procedure: string; // e.g. "MRI Breast Screen"
+    frequency: string; // e.g. "Every 6 months"
+    startAge: string; // e.g. "Age 30"
+}
+
+// Completely Restructured Clinical Analysis
+export interface NDimensionalAnalysis {
+    clinicalSummary: string; // Concise overview
+    overallRiskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+    
+    // The "What To Do" Sections
+    actionPlan: ActionItem[]; 
+    lifestyleModifications: LifestyleMod[];
+    surveillancePlan: MonitoringProtocol[];
 }
 
 export interface AnalysisResult {
@@ -136,20 +151,18 @@ export interface AnalysisResult {
 
 // === MODULE B: R&D DISCOVERY TYPES ===
 
-// 1. Ligand Architect
 export interface DockingSimulation {
     targetName: string;
-    pdbId: string; // The protein structure
+    pdbId: string; 
     ligandName: string;
-    bindingEnergy: number; // kcal/mol
+    bindingEnergy: number; 
     activeSiteResidues: number[];
 }
 
-// 2. System Perturbation
 export interface NetworkNode {
     id: string;
     group: 'GENE' | 'PROTEIN' | 'METABOLITE';
-    impactScore: number; // 0-1, influences radius
+    impactScore: number; 
 }
 export interface NetworkLink {
     source: string;
@@ -157,19 +170,17 @@ export interface NetworkLink {
     interactionType: 'ACTIVATION' | 'INHIBITION';
 }
 
-// 3. Insight Miner
 export interface LiteratureInsight {
     title: string;
-    source: string; // e.g. "Nature Medicine, 2024"
+    source: string;
     summary: string;
-    relevanceScore: number; // 0-100
+    relevanceScore: number;
 }
 
-// 4. Stratification
 export interface PopulationData {
-    population: string; // e.g. "East Asian", "European"
+    population: string;
     alleleFrequency: number;
-    predictedEfficacy: number; // 0-100%
+    predictedEfficacy: number; 
 }
 
 export interface SandboxResult {
@@ -180,4 +191,11 @@ export interface SandboxResult {
     literature: LiteratureInsight[];
     stratification: PopulationData[];
     convergenceInsight: string;
+}
+
+export interface CorrelationPoint {
+    x: string;
+    y: string;
+    value: number;
+    significance: number;
 }

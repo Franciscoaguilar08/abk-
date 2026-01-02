@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Network, BookOpen, Globe2, 
@@ -79,39 +80,61 @@ export const DiscoveryLab: React.FC = () => {
         setLoading(true);
         setResult(null); 
         setIsOfflineMode(false);
-        setStatus("INITIALIZING PROTOCOL...");
+        
+        // Specific status requested by user
+        setStatus("Consultando predicciones estructurales de AlphaMissense...");
 
-        try {
-            // Attempt Real API Call
-            const res = await analyzeDiscoveryData(inputToUse, setStatus);
-            
-            if (res) {
-                setResult(res);
-                setLoading(false); // Success: Stop loading here
-            } else {
-                throw new Error("Empty response from AI");
+        // Debug Log
+        console.log('Verificando conexión con Gemini...');
+
+        let attempts = 0;
+        const maxAttempts = 3;
+        let success = false;
+
+        while (attempts < maxAttempts && !success) {
+            try {
+                attempts++;
+                if (attempts > 1) {
+                    setStatus(`REINTENTO DE CONEXIÓN (${attempts}/${maxAttempts})...`);
+                    await new Promise(r => setTimeout(r, 1000)); // Backoff delay
+                }
+
+                // Update status right before call
+                setStatus("Esperando respuesta del servidor de DeepMind...");
+
+                // Attempt Real API Call
+                const res = await analyzeDiscoveryData(inputToUse, setStatus);
+                
+                if (res) {
+                    setResult(res);
+                    setLoading(false); 
+                    success = true;
+                } else {
+                    throw new Error("Respuesta vacía del servidor de IA");
+                }
+
+            } catch (e: any) {
+                console.error(`Intento ${attempts} fallido:`, e);
+
+                // If this was the last attempt
+                if (attempts === maxAttempts) {
+                    // STOP FALLBACK: User requested to see the real error
+                    // setIsOfflineMode(true); <--- DISABLED AUTOMATIC FALLBACK
+                    
+                    /* 
+                    const fallbackData = {
+                        ...MOCK_SANDBOX_RESULT,
+                        targetId: inputToUse.toUpperCase(),
+                        docking: { ...MOCK_SANDBOX_RESULT.docking, targetName: inputToUse.toUpperCase() }
+                    };
+                    setResult(fallbackData);
+                    */
+
+                    setLoading(false);
+                    setStatus(`ERROR CRÍTICO: ${e.message || "Fallo de conexión"}`);
+                }
             }
-
-        } catch (e) {
-            console.warn("Simulation API failed, switching to offline fallback", e);
-            setStatus("CONNECTION ERROR. ENGAGING OFFLINE SIMULATION...");
-            
-            // Artificial delay to show the error status before switching to fallback
-            // This ensures the user sees something is happening even if the API fails
-            setTimeout(() => {
-                const fallbackData = {
-                    ...MOCK_SANDBOX_RESULT,
-                    targetId: inputToUse.toUpperCase(),
-                    docking: { ...MOCK_SANDBOX_RESULT.docking, targetName: inputToUse.toUpperCase() }
-                };
-                setResult(fallbackData);
-                setIsOfflineMode(true);
-                setLoading(false); // Fallback: Stop loading here (INSIDE timeout)
-            }, 2000);
         }
-        // CRITICAL FIX: Removed 'finally' block. 
-        // Previously, 'finally' ran immediately after 'catch', setting loading=false 
-        // BEFORE the timeout executed, causing the UI to flash and reset to standby.
     };
 
     return (
