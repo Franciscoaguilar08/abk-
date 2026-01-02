@@ -1,5 +1,4 @@
 
-
 export enum VariantRiskLevel {
   LOW = 'LOW',
   MODERATE = 'MODERATE',
@@ -82,21 +81,23 @@ export interface PharmaProfile {
   interactions: DrugInteraction[];
 }
 
+// Updated Oncology Profile for Molecular Pathology
 export interface OncologyProfile {
   gene: string;
-  predisposition: string;
-  riskScore: number; // 0-100
-  notes: string;
+  variant: string;
+  // AMP/ASCO/CAP Evidence Tiers
+  evidenceTier: 'TIER_1_STRONG' | 'TIER_2_POTENTIAL' | 'TIER_3_UNCERTAIN' | 'TIER_4_BENIGN';
+  
+  // The "Why" - Molecular Mechanism
+  mechanismOfAction: string; // e.g. "Loss of Heterozygosity (LOH)", "Constitutive Activation"
+  cancerHallmark: string; // e.g. "Genomic Instability", "Sustaining Proliferative Signaling"
+  
+  // The "Action" - Therapeutics
+  therapeuticImplications: string[]; // e.g. ["PARP Inhibitors", "Platinum-based chemotherapy"]
+  
+  riskScore: number; // 0-100 Scientific probability score
+  citation: string; // e.g. "NCCN Guidelines v2.2024"
   functionalCategory: 'DNA_REPAIR' | 'CELL_CYCLE' | 'METABOLISM' | 'IMMUNITY' | 'UNKNOWN';
-}
-
-export interface PhenotypeTrait {
-  trait: string; 
-  prediction: string; 
-  gene: string; 
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-  category: 'APPEARANCE' | 'NUTRITION' | 'FITNESS' | 'SENSORY';
-  description: string;
 }
 
 export interface EquityAnalysis {
@@ -104,6 +105,16 @@ export interface EquityAnalysis {
   biasCorrectionApplied: boolean;
   adjustmentFactor: number; 
   explanation: string;
+}
+
+// === NEW: PHENOTYPE TRAITS ===
+export interface PhenotypeTrait {
+  trait: string;
+  category: 'APPEARANCE' | 'NUTRITION' | 'FITNESS' | 'SENSORY' | 'OTHER';
+  prediction: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  description: string;
+  gene: string;
 }
 
 // === NEW: ACTIONABLE CLINICAL INTELLIGENCE ===
@@ -143,7 +154,7 @@ export interface AnalysisResult {
   variants: VariantAnalysis[];
   pharmaProfiles: PharmaProfile[];
   oncologyProfiles: OncologyProfile[];
-  phenotypeTraits: PhenotypeTrait[];
+  phenotypeTraits?: PhenotypeTrait[];
   overallRiskScore: number; 
   equityAnalysis?: EquityAnalysis; 
   nDimensionalAnalysis?: NDimensionalAnalysis; 

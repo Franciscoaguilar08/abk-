@@ -126,28 +126,27 @@ export const analyzeGenomicData = async (
       }
   }).join("\n---\n");
 
-  if(onStatusUpdate) onStatusUpdate("Generating Actionable Clinical Protocol...");
+  if(onStatusUpdate) onStatusUpdate("Running Molecular Pathology Analysis...");
   await yieldToMain();
 
   const systemInstruction = `
-    You are ABK Genomics Digital Twin Engine, a highly advanced Clinical Decision Support System.
+    You are ABK Genomics Digital Twin Engine. Act as a **Senior Molecular Pathologist** and Oncologist.
     
-    CRITICAL INSTRUCTION:
-    - STOP providing abstract biological descriptions (no cascades, no molecular topology).
-    - START providing ACTIONABLE CLINICAL ADVICE.
-    - Your goal is to tell the doctor or patient WHAT TO DO next.
-    - Focus on: Screening schedules, Lifestyle changes, Specialists to visit, and Medication adjustments.
-    - Be concise, direct, and authoritative based on the data.
+    CRITICAL INSTRUCTIONS:
+    1. **Actionable Clinical Plans**: Provide concrete steps (Screening, Specialists) in the nDimensionalAnalysis section.
+    2. **Oncology Rigor**: For the 'oncologyProfiles' section, do NOT use generic notes. You must explain the **Molecular Mechanism** of the cancer.
+       - Cite the **Hallmark of Cancer** involved (e.g. Genomic Instability).
+       - Classify Evidence based on **AMP/ASCO/CAP Guidelines** (Tier 1 = Strong Clinical Significance).
+       - Suggest **Therapeutic Targets** (e.g. "Sensitive to PARP inhibitors due to HRD").
+    3. **Risk Scores**: Use scientifically grounded probability (0-100) based on ClinVar pathogenicity and CADD scores.
   `;
 
   const prompt = `
     Analyze these variants based on the fetched API data below:
     ${realDataContext}
     
-    Generate a 'nDimensionalAnalysis' that acts as a CLINICAL ACTION PLAN.
-    - nDimensionalAnalysis.actionPlan: Specific medical next steps (e.g., "Refer to cardiologist", "Annual MRI").
-    - nDimensionalAnalysis.lifestyleModifications: Diet/Exercise tailored to the gene.
-    - nDimensionalAnalysis.surveillancePlan: Checkup frequency.
+    Generate the JSON response.
+    For 'oncologyProfiles', specifically focus on the *Why* (Mechanism) and *How to Treat* (Therapeutics).
   `;
 
   const response = await ai.models.generateContent({
@@ -281,9 +280,13 @@ export const analyzeGenomicData = async (
                 type: Type.OBJECT,
                 properties: {
                     gene: { type: Type.STRING },
-                    predisposition: { type: Type.STRING },
+                    variant: { type: Type.STRING },
+                    evidenceTier: { type: Type.STRING, enum: ['TIER_1_STRONG', 'TIER_2_POTENTIAL', 'TIER_3_UNCERTAIN', 'TIER_4_BENIGN'] },
+                    mechanismOfAction: { type: Type.STRING, description: "Biophysical mechanism e.g. Loss of Heterozygosity" },
+                    cancerHallmark: { type: Type.STRING },
+                    therapeuticImplications: { type: Type.ARRAY, items: { type: Type.STRING } },
                     riskScore: { type: Type.NUMBER },
-                    notes: { type: Type.STRING },
+                    citation: { type: Type.STRING },
                     functionalCategory: { 
                         type: Type.STRING, 
                         enum: ['DNA_REPAIR', 'CELL_CYCLE', 'METABOLISM', 'IMMUNITY', 'UNKNOWN'],
@@ -297,11 +300,11 @@ export const analyzeGenomicData = async (
                 type: Type.OBJECT,
                 properties: {
                     trait: { type: Type.STRING },
+                    category: { type: Type.STRING, enum: ['APPEARANCE', 'NUTRITION', 'FITNESS', 'SENSORY', 'OTHER'] },
                     prediction: { type: Type.STRING },
-                    gene: { type: Type.STRING },
-                    confidence: { type: Type.STRING },
-                    category: { type: Type.STRING },
-                    description: { type: Type.STRING }
+                    confidence: { type: Type.STRING, enum: ['HIGH', 'MEDIUM', 'LOW'] },
+                    description: { type: Type.STRING },
+                    gene: { type: Type.STRING }
                 }
             }
           }
@@ -327,18 +330,15 @@ export const analyzeGenomicData = async (
       })),
       pharmaProfiles: parsed.pharmaProfiles || [],
       oncologyProfiles: parsed.oncologyProfiles || [],
-      phenotypeTraits: parsed.phenotypeTraits || []
+      phenotypeTraits: parsed.phenotypeTraits || [],
   } as AnalysisResult;
 };
 
-// --- MODULE B: R&D DISCOVERY ANALYSIS (Unchanged for clarity, but included in return) ---
+// --- MODULE B: R&D DISCOVERY ANALYSIS ---
 export const analyzeDiscoveryData = async (
     targetInput: string,
     onStatusUpdate?: (status: string) => void
 ): Promise<SandboxResult> => {
-    // ... (Keeping existing logic for R&D module, focusing update on Clinical)
-    // Re-implementing simplified version to match file replacement requirement
-    
     if (onStatusUpdate) onStatusUpdate("Initializing R&D Sandbox Environment...");
     await yieldToMain();
 

@@ -8,6 +8,7 @@ import { PharmaCard } from './components/PharmaCard';
 import { PhenotypeCard } from './components/PhenotypeCard';
 import { AncestryCard } from './components/AncestryCard';
 import { NDimensionalCard } from './components/NDimensionalCard';
+import { OncologyDetailCard } from './components/OncologyDetailCard'; // New Component
 import { LandingPage } from './components/LandingPage';
 import { CommandHub } from './components/CommandHub';
 import { DiscoveryLab } from './components/DiscoveryLab';
@@ -294,10 +295,10 @@ const App: React.FC = () => {
                                 <ShieldCheck className="w-3 h-3" /> Digital Twin Core
                             </div>
                             <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-none font-brand">
-                                Genomic <span className="text-emerald-400">Integration</span>
+                                Digital <span className="text-emerald-400">Twin</span> Construction
                             </h1>
                             <p className="text-slate-400 text-lg max-w-lg leading-relaxed">
-                                Upload DNA data (VCF) to instantiate your digital biological twin. Now powered by <strong>AlphaMissense Logic</strong> for rigorous biophysical validation.
+                                Upload <strong>your DNA data (VCF)</strong> to instantiate your biological digital twin. Powered by AlphaMissense Logic for rigorous biophysical validation.
                             </p>
                         </div>
                     </div>
@@ -309,7 +310,7 @@ const App: React.FC = () => {
                                 <div className="lg:col-span-7 flex flex-col">
                                     <div className="flex items-center justify-between mb-6">
                                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                            <Database className="w-4 h-4" /> Digital Twin Source Data
+                                            <Database className="w-4 h-4" /> Twin Source Data
                                         </h3>
                                         {inputData && (
                                             <button onClick={() => setInputData("")} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
@@ -322,7 +323,7 @@ const App: React.FC = () => {
                                             onClick={() => setInputType('upload')}
                                             className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${inputType === 'upload' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
-                                            <Upload className="w-3 h-3" /> Upload DNA
+                                            <Upload className="w-3 h-3" /> Upload Your DNA
                                         </button>
                                         <button 
                                             onClick={() => setInputType('paste')}
@@ -443,7 +444,7 @@ const App: React.FC = () => {
                                             disabled={!inputData}
                                             className="w-full"
                                         >
-                                            INITIALIZE TWIN
+                                            INSTANTIATE TWIN
                                             <ArrowRight className="w-5 h-5" />
                                         </SciFiButton>
                                     </div>
@@ -465,8 +466,8 @@ const App: React.FC = () => {
                                     <Server className="w-8 h-8 text-emerald-400 relative z-10" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-brand font-bold text-white tracking-wide">Live Pipeline</h2>
-                                    <p className="text-xs text-slate-400 font-mono">Building Digital Twin Model...</p>
+                                    <h2 className="text-xl font-brand font-bold text-white tracking-wide">Digital Twin Active</h2>
+                                    <p className="text-xs text-slate-400 font-mono">Building personalized biological model...</p>
                                 </div>
                             </div>
                             <div className="flex flex-col items-center justify-center py-8">
