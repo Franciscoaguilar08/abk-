@@ -202,6 +202,14 @@ export interface SandboxResult {
     literature: LiteratureInsight[];
     stratification: PopulationData[];
     convergenceInsight: string;
+    
+    // New Detailed Explanations for Step-by-Step UI
+    detailedAnalysis: {
+        dockingDynamics: string; // Explains DeltaG, Kd, Steric hindrance
+        pathwayKinetics: string; // Explains signal transduction rates
+        evidenceSynthesis: string; // Explains confidence intervals / p-values
+        populationStat: string; // Explains statistical significance of stratification
+    };
 }
 
 export interface CorrelationPoint {

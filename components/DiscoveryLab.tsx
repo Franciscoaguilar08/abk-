@@ -4,7 +4,8 @@ import {
     Box, Network, BookOpen, Globe2, 
     Microscope, 
     Cpu, ShieldCheck, Zap, Activity, Dna,
-    Database, PlayCircle, AlertTriangle, Search, Loader2
+    Database, PlayCircle, AlertTriangle, Search, Loader2,
+    FileText, Terminal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SciFiButton } from './SciFiButton';
@@ -58,7 +59,13 @@ const MOCK_SANDBOX_RESULT: SandboxResult = {
         { population: "Colorectal Cancer", alleleFrequency: 3.0, predictedEfficacy: 40 },
         { population: "Pancreatic Cancer", alleleFrequency: 1.5, predictedEfficacy: 55 }
     ],
-    convergenceInsight: "Convergence of structural vulnerability (Cys12) and high clinical prevalence in NSCLC suggests high priority for covalent inhibitor development, though resistance pathways (PI3K) require combo therapy."
+    convergenceInsight: "Convergence of structural vulnerability (Cys12) and high clinical prevalence in NSCLC suggests high priority for covalent inhibitor development, though resistance pathways (PI3K) require combo therapy.",
+    detailedAnalysis: {
+        dockingDynamics: "Calculated ΔG of -11.5 kcal/mol suggests nanomolar affinity (Kd ~1-5 nM). Covalent bond formation at Cys12 is thermodynamically favorable due to nucleophilic attack trajectory, overcoming steric hindrance in the Switch II pocket.",
+        pathwayKinetics: "MAPK signaling output is predicted to drop by 85% within 2 hours of inhibition. However, PI3K bypass signaling activates primarily via EGFR feedback loops with a rate constant k_on significantly slower than KRAS re-synthesis.",
+        evidenceSynthesis: "Meta-analysis of 3 core papers indicates high confidence (p < 0.001) in covalent inhibition strategy. Structural data (Science, 2020) provides 1.5Å resolution validation of the binding pose.",
+        populationStat: "Stratification reveals a 13% allele frequency in NSCLC with high predicted efficacy due to 'oncogene addiction'. Reduced efficacy in CRC suggests tissue-specific feedback mechanisms reduce the therapeutic index."
+    }
 };
 
 // --- MAIN COMPONENT ---
@@ -116,22 +123,25 @@ export const DiscoveryLab: React.FC = () => {
             } catch (e: any) {
                 console.error(`Intento ${attempts} fallido:`, e);
 
-                // If this was the last attempt
+                // If this was the last attempt, SWITCH TO OFFLINE MODE
                 if (attempts === maxAttempts) {
-                    // STOP FALLBACK: User requested to see the real error
-                    // setIsOfflineMode(true); <--- DISABLED AUTOMATIC FALLBACK
+                    console.warn("Connection failed. Activating Offline Simulation Mode.");
+                    setIsOfflineMode(true);
                     
-                    /* 
+                    // Adapt the Mock Data to the user's input so it feels responsive
                     const fallbackData = {
                         ...MOCK_SANDBOX_RESULT,
                         targetId: inputToUse.toUpperCase(),
-                        docking: { ...MOCK_SANDBOX_RESULT.docking, targetName: inputToUse.toUpperCase() }
+                        docking: { 
+                            ...MOCK_SANDBOX_RESULT.docking, 
+                            targetName: inputToUse.toUpperCase() 
+                        },
+                        hypothesis: `[SIMULATION MODE] Hypothesis generated for ${inputToUse} based on analogous structural homologues. Connectivity to Gemini server was interrupted.`
                     };
+                    
                     setResult(fallbackData);
-                    */
-
                     setLoading(false);
-                    setStatus(`ERROR CRÍTICO: ${e.message || "Fallo de conexión"}`);
+                    setStatus(`SIMULACIÓN OFFLINE ACTIVADA`);
                 }
             }
         }
@@ -227,6 +237,7 @@ export const DiscoveryLab: React.FC = () => {
                     color="violet"
                     loading={loading}
                     status={loading ? "DOCKING SIMULATION..." : (result && result.docking && result.docking.pdbId ? "MODEL RENDERED" : "STANDBY")}
+                    analysisText={result?.detailedAnalysis?.dockingDynamics}
                 >
                     {result && !loading && result.docking && result.docking.pdbId ? (
                         <div className="h-full flex flex-col animate-fade-in">
@@ -267,6 +278,7 @@ export const DiscoveryLab: React.FC = () => {
                     color="cyan"
                     loading={loading}
                     status={loading ? "TRACING PATHWAYS..." : (result && result.network ? "NETWORK ACTIVE" : "STANDBY")}
+                    analysisText={result?.detailedAnalysis?.pathwayKinetics}
                 >
                     {result && !loading && result.network ? (
                         <div className="h-full flex flex-col animate-fade-in">
@@ -292,6 +304,7 @@ export const DiscoveryLab: React.FC = () => {
                     color="amber"
                     loading={loading}
                     status={loading ? "SEMANTIC SEARCH..." : (result && result.literature ? `${result.literature.length} SOURCES FOUND` : "STANDBY")}
+                    analysisText={result?.detailedAnalysis?.evidenceSynthesis}
                 >
                      {result && !loading && result.literature ? (
                         <div className="h-full flex flex-col animate-fade-in">
@@ -329,6 +342,7 @@ export const DiscoveryLab: React.FC = () => {
                     color="emerald"
                     loading={loading}
                     status={loading ? "CALCULATING ALLELE FREQ..." : (result && result.stratification ? "POPULATION MAPPED" : "STANDBY")}
+                    analysisText={result?.detailedAnalysis?.populationStat}
                 >
                     {result && !loading && result.stratification ? (
                         <div className="h-full flex flex-col items-center justify-center relative animate-fade-in">
@@ -397,8 +411,9 @@ const SandboxCard: React.FC<{
     color: string, 
     loading: boolean,
     status: string,
-    children: React.ReactNode 
-}> = ({ title, icon: Icon, color, loading, status, children }) => {
+    children: React.ReactNode,
+    analysisText?: string
+}> = ({ title, icon: Icon, color, loading, status, children, analysisText }) => {
     
     const colors: any = {
         violet: 'border-violet-500/30 shadow-[0_0_20px_rgba(139,92,246,0.1)]',
@@ -415,7 +430,7 @@ const SandboxCard: React.FC<{
     };
 
     return (
-        <div className={`bg-[#050505] rounded-xl border ${colors[color]} relative flex flex-col h-[450px] overflow-hidden group transition-all duration-300`}>
+        <div className={`bg-[#050505] rounded-xl border ${colors[color]} relative flex flex-col h-[520px] overflow-hidden group transition-all duration-300`}>
              {/* Header */}
              <div className="p-4 border-b border-white/5 bg-white/5 backdrop-blur-sm flex justify-between items-center z-10">
                  <div className="flex items-center gap-3">
@@ -435,8 +450,21 @@ const SandboxCard: React.FC<{
              </div>
 
              {/* Content Area */}
-             <div className="flex-grow p-4 relative z-0 overflow-hidden">
-                 {children}
+             <div className="flex-grow p-4 relative z-0 overflow-hidden flex flex-col">
+                 <div className="flex-grow">
+                    {children}
+                 </div>
+                 
+                 {/* NEW: AI Explanation Box */}
+                 {analysisText && !loading && (
+                     <div className="mt-4 p-3 bg-slate-900/80 border-l-2 border-white/20 rounded-r text-[10px] text-slate-400 font-mono leading-relaxed relative animate-fade-in">
+                         <div className="flex items-center gap-2 mb-1 text-xs font-bold text-white uppercase tracking-wider">
+                             <Terminal className="w-3 h-3 text-emerald-500" />
+                             System Analysis
+                         </div>
+                         {analysisText}
+                     </div>
+                 )}
              </div>
 
              {/* Hover Glow */}

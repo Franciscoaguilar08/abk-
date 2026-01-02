@@ -1,8 +1,7 @@
 
 import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { VariantAnalysis, VariantRiskLevel, OncologyProfile } from '../types';
-import { ShieldCheck, Target, AlertOctagon, CheckCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, AlertTriangle, AlertOctagon, CheckCircle, HelpCircle, Activity } from 'lucide-react';
 
 interface RiskChartProps {
   variants: VariantAnalysis[];
@@ -12,76 +11,111 @@ interface OncologyRiskChartProps {
     profiles: OncologyProfile[];
 }
 
-// Custom Tooltip for Pie Chart
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl backdrop-blur-md">
-        <p className="text-slate-200 font-bold text-xs mb-1">{payload[0].name}</p>
-        <p className="text-white font-mono font-bold text-sm">
-          {payload[0].value} <span className="text-slate-400 text-xs font-normal">variants</span>
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
 export const RiskDistributionChart: React.FC<RiskChartProps> = ({ variants }) => {
   const safeVariants = variants || [];
-  
-  const data = [
-    { name: 'High / Pathogenic', count: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.HIGH || v.riskLevel === VariantRiskLevel.PATHOGENIC).length, color: '#ef4444' }, // Red-500
-    { name: 'Moderate Risk', count: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.MODERATE).length, color: '#f97316' }, // Orange-500
-    { name: 'Uncertain Sig.', count: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.UNCERTAIN).length, color: '#eab308' }, // Yellow-500
-    { name: 'Benign / Low', count: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.LOW || v.riskLevel === VariantRiskLevel.BENIGN).length, color: '#10b981' }, // Emerald-500
-  ].filter(d => d.count > 0);
-
   const total = safeVariants.length;
+
+  // 1. Categorize Data
+  const counts = {
+    critical: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.PATHOGENIC || v.riskLevel === VariantRiskLevel.HIGH).length,
+    moderate: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.MODERATE).length,
+    uncertain: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.UNCERTAIN).length,
+    benign: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.LOW || v.riskLevel === VariantRiskLevel.BENIGN).length,
+  };
+
+  // 2. Calculate Percentages for Bar Widths
+  const getPct = (count: number) => total > 0 ? (count / total) * 100 : 0;
 
   if (total === 0) {
       return (
-          <div className="h-64 flex flex-col items-center justify-center text-slate-500">
-              <p>No variant data loaded.</p>
+          <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 border border-dashed border-slate-800 rounded-xl">
+              <Activity className="w-8 h-8 mb-2 opacity-50" />
+              <p className="text-sm">No variants loaded for analysis.</p>
           </div>
       )
   }
 
   return (
-    <div className="h-64 w-full flex items-center justify-center relative">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={60}
-            outerRadius={80}
-            paddingAngle={5}
-            dataKey="count"
-            stroke="none"
-            cornerRadius={4}
-          >
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color} />
-            ))}
-          </Pie>
-          <RechartsTooltip content={<CustomTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
-      
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <span className="text-3xl font-brand font-bold text-white">{total}</span>
-        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Total</span>
+    <div className="w-full h-full flex flex-col">
+      {/* Explanation Header */}
+      <div className="mb-6 flex items-start gap-3 bg-slate-900/50 p-3 rounded-lg border border-white/5">
+        <HelpCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+        <div className="text-xs text-slate-400 leading-relaxed">
+            <strong className="text-indigo-300 block mb-1">Risk Stratification Overview</strong>
+            This chart categorizes detected genetic variants by their potential impact on health. 
+            It separates <strong>Actionable Findings</strong> (Red) from variants of <strong>Uncertain Significance (VUS)</strong> (Yellow) and benign traits.
+        </div>
       </div>
 
-      <div className="absolute bottom-0 right-0 flex flex-col gap-1 pointer-events-none">
-          {data.map(d => (
-              <div key={d.name} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{backgroundColor: d.color}}></div>
-                  <span className="text-[10px] text-slate-400">{d.name}</span>
+      {/* THE STRATIFICATION BAR (Health Meter) */}
+      <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex mb-6 shadow-inner relative">
+          {/* Critical Segment */}
+          <div style={{ width: `${getPct(counts.critical)}%` }} className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)] transition-all duration-1000 relative group">
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[size:1rem_1rem] opacity-30"></div>
+          </div>
+          {/* Moderate Segment */}
+          <div style={{ width: `${getPct(counts.moderate)}%` }} className="h-full bg-orange-500 transition-all duration-1000 opacity-90"></div>
+          {/* Uncertain Segment */}
+          <div style={{ width: `${getPct(counts.uncertain)}%` }} className="h-full bg-yellow-500 transition-all duration-1000 opacity-80"></div>
+          {/* Benign Segment */}
+          <div style={{ width: `${getPct(counts.benign)}%` }} className="h-full bg-emerald-500 transition-all duration-1000 opacity-60"></div>
+      </div>
+
+      {/* DETAILED BREAKDOWN GRID */}
+      <div className="grid grid-cols-2 gap-3 flex-grow">
+          
+          {/* CRITICAL CARD */}
+          <div className="bg-red-900/10 border border-red-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-red-900/20 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase tracking-wider">
+                      <ShieldAlert className="w-4 h-4" /> Pathogenic
+                  </div>
+                  <span className="text-xl font-mono font-bold text-white">{counts.critical}</span>
               </div>
-          ))}
+              <div className="text-[10px] text-red-200/60 leading-tight">
+                  High clinical impact. Immediate medical attention advised.
+              </div>
+          </div>
+
+          {/* MODERATE CARD */}
+          <div className="bg-orange-900/10 border border-orange-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-orange-900/20 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-orange-400 text-xs font-bold uppercase tracking-wider">
+                      <AlertTriangle className="w-4 h-4" /> Moderate
+                  </div>
+                  <span className="text-xl font-mono font-bold text-white">{counts.moderate}</span>
+              </div>
+              <div className="text-[10px] text-orange-200/60 leading-tight">
+                  Likely pathogenic or increased risk factor. Monitoring required.
+              </div>
+          </div>
+
+          {/* UNCERTAIN CARD */}
+          <div className="bg-yellow-900/10 border border-yellow-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-yellow-900/20 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-yellow-400 text-xs font-bold uppercase tracking-wider">
+                      <HelpCircle className="w-4 h-4" /> Uncertain (VUS)
+                  </div>
+                  <span className="text-xl font-mono font-bold text-white">{counts.uncertain}</span>
+              </div>
+              <div className="text-[10px] text-yellow-200/60 leading-tight">
+                  Inconclusive data. Requires re-evaluation as evidence evolves.
+              </div>
+          </div>
+
+          {/* BENIGN CARD */}
+          <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-emerald-900/20 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                      <CheckCircle className="w-4 h-4" /> Benign
+                  </div>
+                  <span className="text-xl font-mono font-bold text-white">{counts.benign}</span>
+              </div>
+              <div className="text-[10px] text-emerald-200/60 leading-tight">
+                  Common variations with no known negative health impact.
+              </div>
+          </div>
+
       </div>
     </div>
   );

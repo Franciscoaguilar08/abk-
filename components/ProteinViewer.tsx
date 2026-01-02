@@ -1,5 +1,6 @@
+
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Cuboid, Scan, Crosshair } from 'lucide-react';
+import { Loader2, Cuboid, Scan, Crosshair, AlertTriangle } from 'lucide-react';
 
 declare const $3Dmol: any;
 
@@ -12,7 +13,7 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, highlightPo
     const viewerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
-    const [viewerInstance, setViewerInstance] = useState<any>(null);
+    const [error, setError] = useState(false);
     
     // HUD State
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
@@ -21,61 +22,73 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, highlightPo
 
     useEffect(() => {
         if (!viewerRef.current || !pdbId) return;
+        
+        // Safety check for library existence
+        if (typeof $3Dmol === 'undefined') {
+            console.warn("3Dmol library not loaded");
+            setError(true);
+            setLoading(false);
+            return;
+        }
 
         setLoading(true);
+        setError(false);
 
-        // Initialize Viewer
-        // Using a darker, pure black background for the terminal look
-        const config = { backgroundColor: '#000000' }; 
-        const viewer = $3Dmol.createViewer(viewerRef.current, config);
-        setViewerInstance(viewer);
+        try {
+            // Initialize Viewer
+            const config = { backgroundColor: '#000000' }; 
+            const viewer = $3Dmol.createViewer(viewerRef.current, config);
 
-        // Download PDB from RCSB
-        $3Dmol.download(`pdb:${pdbId}`, viewer, {
-            multimodel: true,
-            frames: true
-        }, function() {
-            setLoading(false);
-            
-            // 1. Clear Style
-            viewer.setStyle({}, {});
+            // Download PDB from RCSB
+            $3Dmol.download(`pdb:${pdbId}`, viewer, {
+                multimodel: true,
+                frames: true
+            }, function() {
+                setLoading(false);
+                
+                if (!viewer) return;
 
-            // 2. Set General Style (Wireframe + Cartoon hybrid for Tech look)
-            viewer.setStyle({}, {
-                cartoon: { color: '#334155', opacity: 0.4 }, // Slate-700
-                line: { color: '#475569', opacity: 0.2 }
+                // 1. Clear Style
+                viewer.setStyle({}, {});
+
+                // 2. Set General Style
+                viewer.setStyle({}, {
+                    cartoon: { color: '#334155', opacity: 0.4 },
+                    line: { color: '#475569', opacity: 0.2 }
+                });
+
+                // 3. Highlight specific residue
+                if (highlightPosition) {
+                    viewer.setStyle(
+                        { resi: highlightPosition }, 
+                        { 
+                            cartoon: { color: '#ef4444' }, 
+                            sphere: { color: '#ef4444', radius: 1.5, opacity: 0.6 },
+                            stick: { color: '#f97316', radius: 0.2 } 
+                        }
+                    );
+
+                    viewer.addLabel(`RES_${highlightPosition}::MUT`, {
+                        position: { resi: highlightPosition },
+                        backgroundColor: 0x000000,
+                        borderColor: 0x8b5cf6,
+                        borderThickness: 1,
+                        fontColor: '#8b5cf6',
+                        fontSize: 10,
+                        useScreen: true
+                    });
+                }
+
+                viewer.zoomTo();
+                viewer.render();
+                viewer.spin('y', 0.2); 
             });
 
-            // 3. Highlight specific residue (Attention Map Logic)
-            if (highlightPosition) {
-                // Highlight the mutated residue in Neon Red/Orange
-                viewer.setStyle(
-                    { resi: highlightPosition }, 
-                    { 
-                        cartoon: { color: '#ef4444' }, 
-                        sphere: { color: '#ef4444', radius: 1.5, opacity: 0.6 },
-                        stick: { color: '#f97316', radius: 0.2 } 
-                    }
-                );
-
-                // Add label with tech styling
-                viewer.addLabel(`RES_${highlightPosition}::MUT`, {
-                    position: { resi: highlightPosition },
-                    backgroundColor: 0x000000,
-                    borderColor: 0x8b5cf6,
-                    borderThickness: 1,
-                    fontColor: '#8b5cf6',
-                    fontSize: 10,
-                    useScreen: true
-                });
-            }
-
-            // 4. Render
-            viewer.zoomTo();
-            viewer.render();
-            // Continuous slow rotation for "scanning" feel
-            viewer.spin('y', 0.2); 
-        });
+        } catch (e) {
+            console.error("Failed to render 3D protein", e);
+            setError(true);
+            setLoading(false);
+        }
 
         return () => {
              // Cleanup if needed
@@ -90,13 +103,21 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, highlightPo
         
         setCursorPos({ x, y });
         
-        // Simulate 3D coordinates changing based on mouse position + random jitter
         setSimulatedCoords({
             x: parseFloat(((x / rect.width) * 100).toFixed(2)),
             y: parseFloat(((y / rect.height) * 100).toFixed(2)),
             z: parseFloat((Math.random() * 50 + 10).toFixed(2))
         });
     };
+
+    if (error) {
+        return (
+            <div className="w-full h-[300px] rounded-lg border border-slate-800 bg-black flex flex-col items-center justify-center text-slate-500 gap-2">
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+                <span className="text-xs font-mono uppercase">Render Failure - PDB: {pdbId}</span>
+            </div>
+        )
+    }
 
     return (
         <div 
