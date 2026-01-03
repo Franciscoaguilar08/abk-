@@ -23,19 +23,47 @@ const extractRsIdsRegex = (text: string): string[] => {
 };
 
 /**
+ * ATTEMPT TO REPAIR MALFORMED JSON
+ * Common LLM errors: truncated output, unescaped quotes, trailing commas.
+ */
+const jsonRepair = (jsonStr: string): string => {
+    let repaired = jsonStr.trim();
+    
+    // 1. Fix truncated URL/String at the end
+    // Check if it ends with an open quote or inside a string
+    // This is hard to do perfectly without a parser, but we can try simple heuristics
+    
+    // 2. Close open braces/brackets
+    const openBraces = (repaired.match(/{/g) || []).length;
+    const closeBraces = (repaired.match(/}/g) || []).length;
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/\]/g) || []).length;
+
+    if (openBraces > closeBraces) {
+        repaired += "}".repeat(openBraces - closeBraces);
+    }
+    if (openBrackets > closeBrackets) {
+        repaired += "]".repeat(openBrackets - closeBrackets);
+    }
+
+    // 3. Remove trailing commas before closing braces (Common LLM error)
+    repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
+
+    return repaired;
+};
+
+/**
  * ROBUST JSON EXTRACTOR
- * Uses a stack-based approach to find the largest valid JSON object/array wrapper
- * ignoring surrounding chat text.
  */
 const cleanAndParseJSON = (text: string) => {
   if (!text) throw new Error("Empty AI response");
 
-  // 1. Basic Clean
+  // 1. Basic Clean (Markdown)
   let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
   
-  // 2. Extract First Valid JSON Block
-  let firstOpen = clean.indexOf('{');
-  let firstArray = clean.indexOf('[');
+  // 2. Extract First Valid JSON Block (Start to End)
+  const firstOpen = clean.indexOf('{');
+  const firstArray = clean.indexOf('[');
   let startIndex = -1;
   let isArray = false;
 
@@ -47,11 +75,12 @@ const cleanAndParseJSON = (text: string) => {
   }
 
   if (startIndex === -1) {
-      // Last ditch effort: try parsing the whole string in case it's clean
-      try { return JSON.parse(clean); } catch(e) { throw new Error("No JSON object found in response"); }
+      // Try parsing the whole thing as a fallback
+      try { return JSON.parse(clean); } catch(e) { throw new Error("No JSON object found"); }
   }
 
-  // 3. Stack Parser to find matching closing bracket
+  // 3. Stack Parser to find the matching closing bracket
+  // This allows us to ignore text *after* the JSON
   let openChar = isArray ? '[' : '{';
   let closeChar = isArray ? ']' : '}';
   let balance = 0;
@@ -88,21 +117,21 @@ const cleanAndParseJSON = (text: string) => {
       }
   }
 
-  if (endIndex !== -1) {
-      clean = clean.substring(startIndex, endIndex + 1);
-  }
-
-  // 4. Sanitize Common LLM JSON Errors
-  // Remove comments //
-  clean = clean.replace(/\/\/.*$/gm, '');
-  // Remove trailing commas before closing braces
-  clean = clean.replace(/,(\s*[}\]])/g, '$1');
+  // Use extracted block or full string if stack failed (e.g. truncated)
+  let jsonString = (endIndex !== -1) ? clean.substring(startIndex, endIndex + 1) : clean.substring(startIndex);
 
   try {
-    return JSON.parse(clean);
+    return JSON.parse(jsonString);
   } catch (e) {
-    console.error("JSON Parse Failed on:", clean);
-    throw new Error("Invalid JSON format");
+    // 4. If parse fails, try repair
+    console.warn("JSON Parse failed, attempting repair...");
+    try {
+        const repaired = jsonRepair(jsonString);
+        return JSON.parse(repaired);
+    } catch (repairError) {
+        console.error("JSON Repair Failed:", jsonString);
+        throw new Error("Invalid JSON format");
+    }
   }
 };
 

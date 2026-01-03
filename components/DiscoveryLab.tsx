@@ -6,7 +6,7 @@ import {
     Cpu, ShieldCheck, Zap, Activity, Dna,
     Database, PlayCircle, AlertTriangle, Search, Loader2,
     FileText, Terminal, UploadCloud, Link as LinkIcon,
-    HelpCircle, Eye, Fingerprint
+    HelpCircle, Eye, Fingerprint, FlaskConical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SciFiButton } from './SciFiButton';
@@ -17,7 +17,7 @@ import { ProteinViewer } from './ProteinViewer';
 // Workaround for type issues with framer-motion in some environments
 const MotionDiv = motion.div as any;
 
-// --- DEMO MODELS DATA (Fallback if no user data) ---
+// --- DEMO MODELS DATA (Restored) ---
 const DEMO_MODELS = [
     { id: 'KRAS', label: 'KRAS G12C', category: 'ONCOLOGY', color: 'rose' },
     { id: 'ACE2', label: 'ACE2 Receptor', category: 'VIROLOGY', color: 'cyan' },
@@ -169,11 +169,11 @@ export const DiscoveryLab: React.FC<DiscoveryLabProps> = ({ userVariants = [] })
                  <div className="flex flex-col md:flex-row items-start gap-6 justify-between">
                     <div className="max-w-xl">
                         <div className="flex items-center gap-2 text-violet-400 mb-2">
-                             <Microscope className="w-5 h-5" />
-                             <span className="text-xs font-bold tracking-[0.2em] uppercase font-mono">Molecular Simulation Lab</span>
+                             <FlaskConical className="w-5 h-5" />
+                             <span className="text-xs font-bold tracking-[0.2em] uppercase font-mono">Research & Development</span>
                         </div>
                         <h1 className="text-3xl md:text-5xl font-brand font-bold text-white tracking-tight mb-2">
-                            Treatment <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Simulator</span>
+                            Target <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Discovery</span>
                         </h1>
                         <p className="text-sm text-slate-400 leading-relaxed">
                             This module takes specific genes found in your profile and runs a <strong>3D molecular simulation</strong> to predict how experimental drugs might interact with your specific mutations. It uses AlphaFold structures to visualize the "lock and key" mechanism of drug binding.
@@ -246,6 +246,34 @@ export const DiscoveryLab: React.FC<DiscoveryLabProps> = ({ userVariants = [] })
                          </div>
                      </div>
                  )}
+
+                 {/* DEMO MODELS (Restored) */}
+                 <div className="mt-6 pt-4 border-t border-white/5">
+                     <div className="flex items-center gap-2 mb-3">
+                         <Database className="w-3 h-3 text-slate-500" />
+                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                             Standard Reference Models
+                         </span>
+                     </div>
+                     <div className="flex flex-wrap gap-2">
+                         {DEMO_MODELS.map((model) => (
+                             <button
+                                key={model.id}
+                                onClick={() => handleRunSimulation(model.label)}
+                                disabled={loading}
+                                className={`px-4 py-2 rounded-lg border flex items-center gap-2 transition-all bg-slate-900/50 hover:bg-slate-800 ${
+                                    model.color === 'rose' ? 'border-rose-500/30 hover:border-rose-500 text-rose-400' :
+                                    model.color === 'cyan' ? 'border-cyan-500/30 hover:border-cyan-500 text-cyan-400' :
+                                    'border-amber-500/30 hover:border-amber-500 text-amber-400'
+                                }`}
+                             >
+                                 <Box className="w-3 h-3" />
+                                 <span className="text-xs font-bold">{model.id}</span>
+                                 <span className="text-[9px] opacity-60 uppercase">{model.category}</span>
+                             </button>
+                         ))}
+                     </div>
+                 </div>
 
                  {/* LITERATURE INGESTION PANEL */}
                  <AnimatePresence>

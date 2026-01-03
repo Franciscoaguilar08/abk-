@@ -24,8 +24,10 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
     useEffect(() => {
         if (!viewerRef.current) return;
         
-        // Sanitize Input ID
-        let targetId = (uniprotId || pdbId || "").trim().toUpperCase();
+        // Sanitize Input ID: Remove version suffixes like .1 or .2 (e.g. P04637.1 -> P04637)
+        let rawId = (uniprotId || pdbId || "").trim().toUpperCase();
+        let targetId = rawId.split('.')[0]; 
+        
         if (!targetId) return;
 
         // Heuristic: If ID is 4 chars, it's likely PDB, not UniProt
@@ -48,28 +50,22 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
 
         const fetchStructureData = async (id: string, source: 'ALPHAFOLD' | 'RCSB_PDB') => {
             if (source === 'ALPHAFOLD') {
-                // Try v4 first (Standard)
-                try {
-                    const v4 = await fetch(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v4.pdb`);
-                    if (v4.ok) return await v4.text();
-                    
-                    // Fallback to v3 (Older entries)
-                    console.warn("AF v4 not found, trying v3...");
-                    const v3 = await fetch(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v3.pdb`);
-                    if (v3.ok) return await v3.text();
-                    
-                    // Fallback to v2
-                    const v2 = await fetch(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v2.pdb`);
-                    if (v2.ok) return await v2.text();
-
-                    throw new Error("Structure not found in AlphaFold DB");
-                } catch (e) {
-                    throw e;
+                // AlphaFold Fetch Strategy: v4 -> v3 -> v2 -> v1
+                const versions = [4, 3, 2, 1];
+                for (const v of versions) {
+                    try {
+                        const url = `https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v${v}.pdb`;
+                        const res = await fetch(url);
+                        if (res.ok) return await res.text();
+                    } catch (e) {
+                        // continue to next version
+                    }
                 }
+                throw new Error(`Structure AF-${id} not found in AlphaFold DB`);
             } else {
                 // RCSB PDB
                 const res = await fetch(`https://files.rcsb.org/download/${id}.pdb`);
-                if (!res.ok) throw new Error("Structure not found in RCSB");
+                if (!res.ok) throw new Error(`Structure ${id} not found in RCSB`);
                 return await res.text();
             }
         };
@@ -90,13 +86,15 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                     pdbData = await fetchStructureData(targetId, source);
                     setResolvedSource(source); // Update if successful
                 } catch (afError) {
-                    // Fallback: If AlphaFold fails, maybe it's a PDB ID?
-                    if (source === 'ALPHAFOLD' && targetId.length === 4) {
-                        console.log("Fallback to RCSB...");
-                        pdbData = await fetchStructureData(targetId, 'RCSB_PDB');
-                        setResolvedSource('RCSB_PDB');
-                    } else {
-                        throw afError;
+                    console.warn(`Fetch failed for ${targetId} on ${source}. Switching strategy.`);
+                    
+                    // Fallback Switch: If AlphaFold fails, assume PDB ID and vice-versa
+                    const fallbackSource = source === 'ALPHAFOLD' ? 'RCSB_PDB' : 'ALPHAFOLD';
+                    try {
+                        pdbData = await fetchStructureData(targetId, fallbackSource);
+                        setResolvedSource(fallbackSource);
+                    } catch (fallbackError) {
+                        throw afError; // Throw original error if both fail
                     }
                 }
 
