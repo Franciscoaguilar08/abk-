@@ -2,6 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
+import { parseGenomicInput } from "./genomicParser";
+import { ACMG_73, CPIC_PRIORITY } from "./geneLists";
 
 const modelId = "gemini-3-flash-preview"; 
 
@@ -15,7 +17,7 @@ const getAIInstance = () => {
 
 const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
-// Helper: Extract rsIDs using Regex (Faster and more reliable for DB lookup)
+// Helper: Regex Fallback
 const extractRsIdsRegex = (text: string): string[] => {
     const regex = /rs\d+/g;
     const matches = text.match(regex);
@@ -116,89 +118,129 @@ export const analyzeGenomicData = async (
       throw new Error("SIMULATION_MODE_TRIGGER");
   }
 
-  // --- STEP 1: EXTRACTION ---
-  if(onStatusUpdate) onStatusUpdate("Escaneando secuencia en busca de variantes (rsID)...");
+  // --- STEP 1: PARSING & FILTER 1 (0/0) ---
+  if(onStatusUpdate) onStatusUpdate("Parsing VCF & Filtering Wildtypes...");
   await yieldToMain();
+
+  const parsedVariants = parseGenomicInput(genomicInput);
   
-  let rsIds = extractRsIdsRegex(genomicInput);
+  let rsIds: string[] = [];
+  let manualOverrideZygosity = "";
 
-  // --- STEP 2: REAL DATA RETRIEVAL ---
-  if(onStatusUpdate) onStatusUpdate(`Consultando bases de datos biomédicas en tiempo real (${rsIds.length} variantes)...`);
+  // Check for Manual Input Override Header
+  if (genomicInput.startsWith('## OVERRIDE_ZYGOSITY_CONTEXT:')) {
+      const parts = genomicInput.split('##\n\n');
+      if (parts.length > 0) {
+          const header = parts[0];
+          if (header.includes('0/1')) manualOverrideZygosity = 'HETEROZYGOUS';
+          if (header.includes('1/1')) manualOverrideZygosity = 'HOMOZYGOUS';
+      }
+  }
+
+  if (parsedVariants.length > 0) {
+      rsIds = parsedVariants.map(v => v.rsId);
+      if(onStatusUpdate) onStatusUpdate(`Detected ${parsedVariants.length} active variants (Removed 0/0).`);
+  } else {
+      rsIds = extractRsIdsRegex(genomicInput);
+  }
+
+  // --- STEP 2: ENRICHMENT (Real DB) ---
+  if(onStatusUpdate) onStatusUpdate(`Querying Bio-Data for ${rsIds.length} variants...`);
   await yieldToMain();
 
-  let realContext = "No external database records found. Relying on internal knowledge base.";
   let rawDbData: any[] = [];
-
   if (rsIds.length > 0) {
       try {
-          rawDbData = await batchFetchVariantData(rsIds.slice(0, 50)); 
-          if (rawDbData.length > 0) {
-               realContext = JSON.stringify(rawDbData.map(d => ({
-                   id: d.rsId,
-                   gene: d.geneSymbol,
-                   clinvar: d.clinVarSignificance, 
-                   freq: d.gnomadFreq,
-                   cadd: d.caddPhred
-               })), null, 2);
-          }
+          // Limit initial fetch to 100 to prevent timeout, prioritizing parsing logic
+          rawDbData = await batchFetchVariantData(rsIds.slice(0, 100)); 
       } catch (e) {
           console.error("Bioinformatics fetch failed", e);
       }
   }
 
-  // --- STEP 3: SYNTHESIS WITH ZYGOSITY & PENETRANCE LOGIC ---
-  if(onStatusUpdate) onStatusUpdate("Aplicando Lógica de Zigosidad, Penetrancia y Mendel...");
+  // --- STEP 3: SMART FILTERING (ACMG / CPIC / CLINVAR) ---
+  if(onStatusUpdate) onStatusUpdate("Applying ACMG-73 & CPIC Filters...");
+  await yieldToMain();
+
+  const priorityVariants: string[] = [];
+  const keptDbRecords: any[] = []; // To pass to context
+
+  // Map parsed data to DB data for filtering
+  const variantsToProcess = parsedVariants.length > 0 ? parsedVariants : rsIds.map(id => ({ rsId: id, zygosity: 'UNKNOWN' }));
+
+  variantsToProcess.forEach((v: any) => {
+      const dbRecord = rawDbData.find(d => d.rsId === v.rsId);
+      
+      // LOGIC:
+      // 1. Is Gene in ACMG 73?
+      // 2. Is Gene in CPIC Priority?
+      // 3. Is ClinVar Significance Pathogenic/Likely Pathogenic?
+      // 4. Manual Override (if user pasted specific small list, we trust it)
+      
+      const gene = dbRecord?.geneSymbol?.toUpperCase();
+      const isPathogenic = dbRecord?.clinVarSignificance?.toLowerCase().includes('pathogenic');
+      const isACMG = gene && ACMG_73.includes(gene);
+      const isCPIC = gene && CPIC_PRIORITY.includes(gene);
+      
+      const isSmallBatch = variantsToProcess.length < 20; // If user inputs <20 variants, analyze all.
+
+      if (isACMG || isCPIC || isPathogenic || isSmallBatch) {
+          const z = manualOverrideZygosity || v.zygosity || 'UNKNOWN';
+          const refAlt = v.ref ? `REF:${v.ref} ALT:${v.alt}` : '';
+          const tags = [];
+          if (isACMG) tags.push("ACMG_73");
+          if (isCPIC) tags.push("CPIC_PHARMA");
+          if (isPathogenic) tags.push("CLINVAR_PATHOGENIC");
+
+          priorityVariants.push(`ID: ${v.rsId} | GENE: ${gene || '?'} | ZYG: ${z} | TAGS: [${tags.join(',')}] | ${refAlt}`);
+          
+          if (dbRecord) keptDbRecords.push(dbRecord);
+      }
+  });
+
+  const structuredVariantList = priorityVariants.join('\n');
+  const realContext = JSON.stringify(keptDbRecords.map(d => ({
+       id: d.rsId,
+       gene: d.geneSymbol,
+       clinvar: d.clinVarSignificance, 
+       freq: d.gnomadFreq,
+       cadd: d.caddPhred
+  })), null, 2);
+
+  if(onStatusUpdate) onStatusUpdate(`Filtered down to ${priorityVariants.length} CRITICAL variants.`);
+
+  // --- STEP 4: SYNTHESIS ---
+  if(onStatusUpdate) onStatusUpdate("Generating Clinical Report...");
   
   const systemInstruction = `
-    ROLE: You are an expert Clinical Genomicist and Structural Biologist.
-    TASK: Analyze genomic data to produce a clinical report.
+    ROLE: You are an expert Clinical Genomicist.
+    TASK: Analyze the 'CRITICAL VARIANTS' list.
     
-    CRITICAL RULE 1: MENDELIAN INHERITANCE & ZYGOSITY
-    - Extract zygosity from input (VCF '0/1' = Heterozygous, '1/1' = Homozygous). 
-    - OVERRIDE INSTRUCTION: If input starts with '## OVERRIDE_ZYGOSITY_CONTEXT: [VALUE] ##', apply this zygosity to ALL variants.
+    FILTERING NOTICE:
+    The input has been strictly filtered.
+    - It ONLY contains variants in ACMG-73 (Actionable), CPIC (Pharma), or Pathogenic variants.
+    - Treat every variant in this list as potentially significant.
     
-    CRITICAL RULE 2: PENETRANCE LOGIC (The "Frequency Proxy")
-    You must calculate a 'penetrance' level for every variant.
-    
-    A) MATHEMATICAL CHECK:
-       If Population Frequency (gnomAD/MAF) is > 0.01 (1%) AND the condition is severe/lethal:
-       -> FORCE PENETRANCE = 'LOW' (or 'MODERATE').
-       -> RATIONALE: Lethal diseases cannot be common. High frequency implies low penetrance (e.g. HFE C282Y).
-       
-    B) INTERNAL KNOWLEDGE CHECK:
-       Query your internal database for the specific Gene/Variant.
-       - HFE (Hemochromatosis): Low Penetrance.
-       - LRRK2 (Parkinson's): Incomplete Penetrance.
-       - GBA (Gaucher/Parkinson's): Incomplete Penetrance.
-       - BRCA1/2: High Penetrance (but not 100%).
-       
-    C) OUTPUT LOGIC:
-       If Penetrance is 'LOW' or 'MODERATE', the 'riskLevel' should generally NOT be 'CRITICAL/HIGH' for a Healthy Carrier, even if ClinVar says Pathogenic. Lower the alarm level.
+    CRITICAL RULE: PENETRANCE LOGIC
+    1. FREQUENCY CHECK: If gnomAD Frequency > 1% (0.01) AND condition is severe -> Assume LOW PENETRANCE.
+    2. KNOWLEDGE CHECK: Apply known penetrance data for genes like HFE, LRRK2, GBA.
+    3. RISK ADJUSTMENT: If Penetrance is LOW, downgrade 'riskLevel' (e.g. from HIGH to MODERATE) for healthy carriers.
 
-    LOGIC FOR CLINICAL STATUS:
-    1. RECESSIVE (e.g. CFTR): Heterozygous = "CARRIER" (Healthy). Homozygous = "AFFECTED".
-    2. DOMINANT (e.g. BRCA1): Heterozygous = "AFFECTED" (Risk).
-    3. COMPLEX (e.g. MTHFR): Heterozygous is usually BENIGN/LOW risk.
-
-    CALIBRATION PROTOCOL:
-    ${calibrationData ? "Active. Use the provided CALIBRATION DATA to filter out technical artifacts." : "Inactive."}
-
-    DATA: Use the 'REAL DATABASE CONTEXT' as the primary source of truth for variant classification (ClinVar) and Frequency (gnomAD).
-    
-    OUTPUT: Valid JSON matching the schema strictly.
+    OUTPUT: Valid JSON matching the schema.
   `;
 
   const prompt = `
-  INPUT GENOMIC DATA: 
-  ${genomicInput.substring(0, 1500)}... 
+  CRITICAL VARIANTS (ACMG/CPIC/PATHOGENIC): 
+  ${structuredVariantList.substring(0, 30000)}
 
-  REAL DB CONTEXT (Contains gnomAD Frequency): ${realContext}
+  REAL DB CONTEXT: ${realContext}
+  
   FOCUS: ${focusList.join(', ')}
   ANCESTRY: ${ancestry}
   
   INSTRUCTIONS:
-  - Extract ZYGOSITY (0/1 or 1/1).
-  - Determine PENETRANCE ('COMPLETE', 'HIGH', 'MODERATE', 'LOW') using the Frequency Rule (>1% = LOW) and Knowledge Base.
+  - Analyze ONLY the variants listed above.
+  - Determine PENETRANCE.
   - Return JSON.
   `;
 
@@ -282,13 +324,17 @@ export const analyzeGenomicData = async (
         
         // Data Injection
         const enhancedVariants = (parsed.variants || []).map((v: any) => {
-             const real = rawDbData.find(r => r.rsId === v.variant || (v.variant && v.variant.includes(r.rsId)));
-             if (real) {
+             const real = keptDbRecords.find(r => r.rsId === v.variant || (v.variant && v.variant.includes(r.rsId)));
+             // Apply local zygosity if available from parser
+             const localZ = parsedVariants.find(p => p.rsId === v.variant || v.variant.includes(p.rsId))?.zygosity;
+             
+             if (real || localZ) {
                  return {
                      ...v,
-                     clinVarSignificance: real.clinVarSignificance || v.clinVarSignificance,
-                     caddScore: real.caddPhred || v.caddScore,
-                     populationFrequency: real.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency
+                     clinVarSignificance: real?.clinVarSignificance || v.clinVarSignificance,
+                     caddScore: real?.caddPhred || v.caddScore,
+                     populationFrequency: real?.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency,
+                     zygosity: localZ || v.zygosity // Prefer parser zygosity
                  }
              }
              return v;
