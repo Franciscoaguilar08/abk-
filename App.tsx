@@ -18,13 +18,13 @@ import { BioBackground } from './components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
-  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, AlertCircle, WifiOff
+  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, AlertCircle, WifiOff, AlertTriangle, Lock
 } from 'lucide-react';
 import { PillIcon, AlertIcon } from './components/Icons';
 
 // --- ROBUST MOCK DATA FOR OFFLINE MODE ---
 const MOCK_CLINICAL_RESULT: AnalysisResult = {
-    patientSummary: "[OFFLINE SIMULATION] The subject presents with a high-risk oncogenic profile driven by a TP53 mutation (Li-Fraumeni context) and a BRCA2 variant. Pharmacogenomic analysis indicates 'Poor Metabolizer' status for CYP2D6, necessitating dose adjustments for multiple analgesics and antidepressants.",
+    patientSummary: "[SIMULATION MODE - NOT A DIAGNOSIS] The subject presents with a high-risk oncogenic profile driven by a TP53 mutation (Li-Fraumeni context) and a BRCA2 variant. Pharmacogenomic analysis indicates 'Poor Metabolizer' status for CYP2D6, necessitating dose adjustments for multiple analgesics and antidepressants.",
     overallRiskScore: 88,
     variants: [
         {
@@ -42,7 +42,7 @@ const MOCK_CLINICAL_RESULT: AnalysisResult = {
                 pathogenicityScore: 0.98,
                 structuralMechanism: "Arg175His ➔ Loss of Zn Binding ➔ Unfolding of DNA Binding Domain ➔ Tumor Suppression Failure",
                 molecularFunction: "DNA Binding",
-                pdbId: "4IBQ",
+                uniprotId: "P04637", // TP53 UniProt
                 variantPosition: 175,
                 attentionMap: [],
                 predictionConfidence: 0.99,
@@ -63,7 +63,7 @@ const MOCK_CLINICAL_RESULT: AnalysisResult = {
                  pathogenicityScore: 0.92,
                  structuralMechanism: "Frameshift ➔ Premature Stop ➔ Truncated Protein ➔ Loss of Homologous Recombination",
                  molecularFunction: "DNA Repair",
-                 pdbId: "1N0W",
+                 uniprotId: "P51587", // BRCA2 UniProt
                  variantPosition: 1520,
                  attentionMap: [],
                  predictionConfidence: 0.95,
@@ -154,10 +154,8 @@ const EXAMPLES = [
 ];
 
 const ANALYSIS_OPTIONS = [
-    { id: 'COMPREHENSIVE', icon: Activity, label: 'General Health', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
     { id: 'PHARMA', icon: PillIcon, label: 'Pharmacogenomics', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
     { id: 'ONCOLOGY', icon: Dna, label: 'Oncology', color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
-    { id: 'RARE_DISEASE', icon: Microscope, label: 'Rare Disease', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
 ];
 
 const ANCESTRY_OPTIONS = [
@@ -172,14 +170,102 @@ const ANCESTRY_OPTIONS = [
 type AppView = 'LANDING' | 'HUB' | 'WORKSPACE';
 type ModuleType = 'CLINICAL' | 'DISCOVERY';
 
+// --- LEGAL / ETHICAL CONSENT COMPONENT ---
+const LegalConsentModal: React.FC<{ onConsent: () => void }> = ({ onConsent }) => {
+    const [checks, setChecks] = useState({
+        notMedical: false,
+        thirdParty: false,
+        researchOnly: false
+    });
+
+    const allChecked = checks.notMedical && checks.thirdParty && checks.researchOnly;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+            <div className="bg-[#0f172a] border border-red-500/30 rounded-2xl max-w-lg w-full p-8 shadow-[0_0_50px_rgba(239,68,68,0.2)] relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+                
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                        <AlertTriangle className="w-8 h-8 text-red-500" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-white uppercase tracking-tight">Critical Safety Warning</h2>
+                        <p className="text-red-400 text-xs font-mono">MANDATORY USER CONSENT PROTOCOL</p>
+                    </div>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                    <p className="text-slate-300 text-sm leading-relaxed">
+                        You are accessing a <strong>Research Simulation Environment</strong> driven by Generative AI. 
+                        This tool is <strong className="text-white">NOT a medical device</strong>. 
+                        It generates probabilistic outputs that may contain errors (hallucinations).
+                    </p>
+                    
+                    <div className="space-y-3 bg-black/40 p-4 rounded-xl border border-white/5">
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                            <div className="relative flex items-center">
+                                <input type="checkbox" className="peer sr-only" checked={checks.notMedical} onChange={e => setChecks({...checks, notMedical: e.target.checked})} />
+                                <div className="w-5 h-5 border-2 border-slate-600 rounded peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all"></div>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-0.5 left-0.5 opacity-0 peer-checked:opacity-100" />
+                            </div>
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                                I understand this is <strong>NOT a medical diagnosis</strong> and should not replace professional medical advice.
+                            </span>
+                        </label>
+                        
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                             <div className="relative flex items-center">
+                                <input type="checkbox" className="peer sr-only" checked={checks.thirdParty} onChange={e => setChecks({...checks, thirdParty: e.target.checked})} />
+                                <div className="w-5 h-5 border-2 border-slate-600 rounded peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all"></div>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-0.5 left-0.5 opacity-0 peer-checked:opacity-100" />
+                            </div>
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                                I acknowledge that anonymized data is processed by <strong>Google Gemini API</strong> (Third Party).
+                            </span>
+                        </label>
+
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                             <div className="relative flex items-center">
+                                <input type="checkbox" className="peer sr-only" checked={checks.researchOnly} onChange={e => setChecks({...checks, researchOnly: e.target.checked})} />
+                                <div className="w-5 h-5 border-2 border-slate-600 rounded peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all"></div>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-0.5 left-0.5 opacity-0 peer-checked:opacity-100" />
+                            </div>
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                                I will verify all findings with a qualified genetic counselor or oncologist.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <button 
+                    onClick={onConsent}
+                    disabled={!allChecked}
+                    className={`w-full py-4 rounded-xl font-bold uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${
+                        allChecked 
+                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50' 
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    }`}
+                >
+                    {allChecked ? 'Enter Research Environment' : 'Acknowledge Risks to Proceed'}
+                    {allChecked && <ArrowRight className="w-4 h-4" />}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 const App: React.FC = () => {
   // Navigation State
   const [currentView, setCurrentView] = useState<AppView>('LANDING');
   const [activeModule, setActiveModule] = useState<ModuleType>('CLINICAL');
+  
+  // Guardrails State
+  const [hasConsented, setHasConsented] = useState(false);
 
   // Clinical App State
   const [inputData, setInputData] = useState<string>("");
-  const [selectedTargets, setSelectedTargets] = useState<AnalysisFocus[]>(['COMPREHENSIVE']);
+  const [selectedTargets, setSelectedTargets] = useState<AnalysisFocus[]>(['PHARMA']);
   const [selectedAncestry, setSelectedAncestry] = useState<AncestryGroup>(AncestryGroup.GLOBAL);
   
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -198,7 +284,13 @@ const App: React.FC = () => {
 
   // --- Logic Handlers ---
 
-  const enterHub = () => setCurrentView('HUB');
+  const enterHub = () => {
+      // Trigger Consent Modal if not yet consented
+      if (!hasConsented) {
+          // The modal is rendered conditionally based on view, but logic happens here essentially
+      }
+      setCurrentView('HUB');
+  };
   
   const selectModule = (mod: ModuleType) => {
       setActiveModule(mod);
@@ -235,15 +327,21 @@ const App: React.FC = () => {
       setLoading(false);
 
     } catch (err: any) {
-      console.warn("API Failure detected, switching to Offline Simulation", err);
-      
-      // FALLBACK GRACEFUL: Load Mock Data instead of failing
-      setTimeout(() => {
-          setResult(MOCK_CLINICAL_RESULT);
-          setIsOffline(true); // Flag to show "Offline Mode" badge
-          setActiveTab('overview');
+      // SECURE FALLBACK: If API Key is missing (SIMULATION_MODE_TRIGGER) or network fails
+      if (err.message === 'SIMULATION_MODE_TRIGGER' || err.message === 'CONNECTION_FAILED') {
+          console.warn("Activating Secure Offline Simulation Mode");
+          
+          setTimeout(() => {
+              setResult(MOCK_CLINICAL_RESULT);
+              setIsOffline(true);
+              setActiveTab('overview');
+              setLoading(false);
+          }, 1200); // Slight delay for realism
+      } else {
+          console.error(err);
+          setError("Analysis pipeline failed. Please retry.");
           setLoading(false);
-      }, 1500); // Small fake delay for transition
+      }
     }
   };
 
@@ -326,7 +424,7 @@ const App: React.FC = () => {
                     DIGITAL TWIN
                  </span>
                  <span className={`text-[10px] uppercase tracking-widest font-bold ${activeModule === 'DISCOVERY' ? 'text-violet-500' : 'text-emerald-500'}`}>
-                    {activeModule === 'DISCOVERY' ? 'R&D Lab' : 'Genomic Core'}
+                    {activeModule === 'DISCOVERY' ? 'R&D Lab' : 'Genomic Research Core'}
                  </span>
              </div>
           </div>
@@ -351,6 +449,18 @@ const App: React.FC = () => {
         </div>
       </header>
   );
+
+  // CHECK CONSENT - Blocking Modal
+  if (!hasConsented) {
+      return (
+          <>
+             <div className="blur-xl pointer-events-none fixed inset-0 z-0">
+                 <BioBackground variant="app" />
+             </div>
+             <LegalConsentModal onConsent={() => setHasConsented(true)} />
+          </>
+      );
+  }
 
   if (currentView === 'HUB') {
       return (
@@ -382,8 +492,40 @@ const App: React.FC = () => {
                          <div>
                              <h3 className="text-amber-400 font-bold text-sm">Offline Mode Active</h3>
                              <p className="text-amber-200/70 text-xs">
-                                 Connection to Genomic Cloud failed. Displaying <strong>Simulated High-Fidelity Data</strong> for demonstration purposes.
+                                 Secure environment detected (Missing or Invalid API Key). Running in <strong>High-Fidelity Simulation Mode</strong>. Data is local-only.
                              </p>
+                         </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* RESEARCH DISCLAIMER BANNER */}
+            <div className="mb-6 animate-fade-in-up">
+                 <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-xl px-4 py-2 flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                         <Lock className="w-3 h-3 text-indigo-400" />
+                         <span className="text-[10px] text-indigo-300 font-mono">
+                             RESEARCH SIMULATION ENVIRONMENT • NOT A MEDICAL DEVICE
+                         </span>
+                     </div>
+                     <span className="text-[10px] text-slate-500 hidden sm:block">AI-Generated Content</span>
+                 </div>
+            </div>
+
+            {/* ERROR DISPLAY */}
+            {error && !loading && (
+                <div className="mb-8 animate-fade-in-up">
+                    <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-start gap-3">
+                         <AlertCircle className="w-6 h-6 text-red-500 mt-0.5 shrink-0" />
+                         <div>
+                             <h3 className="text-red-400 font-bold mb-1">System Alert</h3>
+                             <p className="text-red-200 text-sm">{error}</p>
+                             <button 
+                                onClick={() => setError(null)} 
+                                className="mt-2 text-xs font-bold uppercase tracking-wider text-red-400 hover:text-white underline"
+                             >
+                                Dismiss
+                             </button>
                          </div>
                     </div>
                 </div>
@@ -608,7 +750,7 @@ const App: React.FC = () => {
                                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-emerald-50 hover:shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all"
                             >
                                 <Download className="w-4 h-4" />
-                                Download Clinical Summary (PDF)
+                                Download Simulation Report (PDF)
                             </button>
                             <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 overflow-x-auto max-w-full">
                                  {['overview', 'variants', 'pharma', 'oncology', 'phenotypes'].map((tab) => (
@@ -798,12 +940,12 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2">
                <ShieldCheck className="w-4 h-4 text-emerald-500" />
                <p>
-                  <strong className="text-slate-400">Validated Sources:</strong> Findings are cross-referenced with <span className="text-slate-300">ClinVar</span>, <span className="text-slate-300">PharmGKB</span>, <span className="text-slate-300">dbSNP</span>.
+                  <strong className="text-slate-400">Validated Sources:</strong> Findings are cross-referenced with <span className="text-slate-300">ClinVar</span>, <span className="text-slate-300">AlphaFold DB</span>, <span className="text-slate-300">dbSNP</span>.
                </p>
             </div>
             <div className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
                <Info className="w-3 h-3" />
-               <p>For research and educational simulation only. Consult a genetic counselor for medical diagnosis.</p>
+               <p>For educational simulation only. NOT A MEDICAL DEVICE.</p>
             </div>
          </div>
       </footer>

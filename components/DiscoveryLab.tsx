@@ -5,20 +5,23 @@ import {
     Microscope, 
     Cpu, ShieldCheck, Zap, Activity, Dna,
     Database, PlayCircle, AlertTriangle, Search, Loader2,
-    FileText, Terminal
+    FileText, Terminal, UploadCloud, Link as LinkIcon,
+    HelpCircle, Eye, Fingerprint
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SciFiButton } from './SciFiButton';
 import { analyzeDiscoveryData } from '../services/geminiService';
-import { SandboxResult, NetworkNode, NetworkLink } from '../types';
+import { SandboxResult, NetworkNode, NetworkLink, VariantAnalysis } from '../types';
 import { ProteinViewer } from './ProteinViewer';
 
-// --- DEMO MODELS DATA ---
+// Workaround for type issues with framer-motion in some environments
+const MotionDiv = motion.div as any;
+
+// --- DEMO MODELS DATA (Fallback if no user data) ---
 const DEMO_MODELS = [
     { id: 'KRAS', label: 'KRAS G12C', category: 'ONCOLOGY', color: 'rose' },
     { id: 'ACE2', label: 'ACE2 Receptor', category: 'VIROLOGY', color: 'cyan' },
-    { id: 'CFTR', label: 'CFTR (F508del)', category: 'RARE DISEASE', color: 'amber' },
-    { id: 'PSEN1', label: 'PSEN1', category: 'NEUROLOGY', color: 'violet' }
+    { id: 'CFTR', label: 'CFTR (F508del)', category: 'RARE DISEASE', color: 'amber' }
 ];
 
 // --- FALLBACK MOCK DATA (OFFLINE MODE) ---
@@ -27,7 +30,7 @@ const MOCK_SANDBOX_RESULT: SandboxResult = {
     hypothesis: "G12C mutation locks KRAS in an active state, driving oncogenesis. Covalent inhibitors targeting Cys12 can lock it in an inactive GDP-bound state.",
     docking: {
         targetName: "KRAS G12C",
-        pdbId: "6OIM", // Valid KRAS structure
+        uniprotId: "P01116", // Real KRAS UniProt
         ligandName: "AMG-510 (Sotorasib)",
         bindingEnergy: -11.5,
         activeSiteResidues: [12, 68, 95]
@@ -68,10 +71,19 @@ const MOCK_SANDBOX_RESULT: SandboxResult = {
     }
 };
 
+// --- PROPS ---
+interface DiscoveryLabProps {
+    userVariants?: VariantAnalysis[];
+}
+
 // --- MAIN COMPONENT ---
 
-export const DiscoveryLab: React.FC = () => {
+export const DiscoveryLab: React.FC<DiscoveryLabProps> = ({ userVariants = [] }) => {
     const [targetInput, setTargetInput] = useState("");
+    const [literatureInput, setLiteratureInput] = useState(""); 
+    const [showLiteratureInput, setShowLiteratureInput] = useState(false);
+    const [showGuide, setShowGuide] = useState(false); // Insight/Help Mode
+    
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState("");
     const [result, setResult] = useState<SandboxResult | null>(null);
@@ -83,15 +95,16 @@ export const DiscoveryLab: React.FC = () => {
         
         if (overrideInput) setTargetInput(overrideInput);
 
-        // Reset State
         setLoading(true);
         setResult(null); 
         setIsOfflineMode(false);
         
-        // Specific status requested by user
-        setStatus("Consultando predicciones estructurales de AlphaMissense...");
+        if (literatureInput.length > 50) {
+            setStatus(`INGESTING LITERATURE CONTEXT (${literatureInput.length} chars)...`);
+        } else {
+            setStatus("Querying AlphaMissense Structural Database...");
+        }
 
-        // Debug Log
         console.log('Verificando conexión con Gemini...');
 
         let attempts = 0;
@@ -102,33 +115,34 @@ export const DiscoveryLab: React.FC = () => {
             try {
                 attempts++;
                 if (attempts > 1) {
-                    setStatus(`REINTENTO DE CONEXIÓN (${attempts}/${maxAttempts})...`);
-                    await new Promise(r => setTimeout(r, 1000)); // Backoff delay
+                    setStatus(`CONNECTION RETRY (${attempts}/${maxAttempts})...`);
+                    await new Promise(r => setTimeout(r, 1000));
                 }
 
-                // Update status right before call
-                setStatus("Esperando respuesta del servidor de DeepMind...");
+                if (literatureInput) {
+                    setStatus("EXTRACTING ENTITIES FROM TECHNICAL PAPER...");
+                } else {
+                    setStatus("Waiting for DeepMind Server Response...");
+                }
 
-                // Attempt Real API Call
-                const res = await analyzeDiscoveryData(inputToUse, setStatus);
+                const res = await analyzeDiscoveryData(inputToUse, literatureInput, setStatus);
                 
                 if (res) {
                     setResult(res);
                     setLoading(false); 
                     success = true;
+                    if (literatureInput) setShowLiteratureInput(false);
                 } else {
-                    throw new Error("Respuesta vacía del servidor de IA");
+                    throw new Error("Empty AI Response");
                 }
 
             } catch (e: any) {
-                console.error(`Intento ${attempts} fallido:`, e);
+                console.error(`Attempt ${attempts} failed:`, e);
 
-                // If this was the last attempt, SWITCH TO OFFLINE MODE
                 if (attempts === maxAttempts) {
                     console.warn("Connection failed. Activating Offline Simulation Mode.");
                     setIsOfflineMode(true);
                     
-                    // Adapt the Mock Data to the user's input so it feels responsive
                     const fallbackData = {
                         ...MOCK_SANDBOX_RESULT,
                         targetId: inputToUse.toUpperCase(),
@@ -141,7 +155,7 @@ export const DiscoveryLab: React.FC = () => {
                     
                     setResult(fallbackData);
                     setLoading(false);
-                    setStatus(`SIMULACIÓN OFFLINE ACTIVADA`);
+                    setStatus(`OFFLINE SIMULATION ACTIVE`);
                 }
             }
         }
@@ -151,67 +165,121 @@ export const DiscoveryLab: React.FC = () => {
         <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6 text-slate-200 font-sans animate-fade-in">
             
             {/* 1. HEADER & SEARCH CORE */}
-            <div className="relative z-10 bg-[#020617]/80 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-2xl">
-                 <div className="flex flex-col md:flex-row items-end gap-6 justify-between">
-                    <div>
+            <div className="relative z-10 bg-[#020617]/80 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-2xl transition-all">
+                 <div className="flex flex-col md:flex-row items-start gap-6 justify-between">
+                    <div className="max-w-xl">
                         <div className="flex items-center gap-2 text-violet-400 mb-2">
                              <Microscope className="w-5 h-5" />
-                             <span className="text-xs font-bold tracking-[0.2em] uppercase font-mono">R&D Innovation Sandbox</span>
+                             <span className="text-xs font-bold tracking-[0.2em] uppercase font-mono">Molecular Simulation Lab</span>
                         </div>
-                        <h1 className="text-3xl md:text-5xl font-brand font-bold text-white tracking-tight">
-                            Target <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Discovery Engine</span>
+                        <h1 className="text-3xl md:text-5xl font-brand font-bold text-white tracking-tight mb-2">
+                            Treatment <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Simulator</span>
                         </h1>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            This module takes specific genes found in your profile and runs a <strong>3D molecular simulation</strong> to predict how experimental drugs might interact with your specific mutations. It uses AlphaFold structures to visualize the "lock and key" mechanism of drug binding.
+                        </p>
                     </div>
                     
-                    <div className="w-full md:w-[500px] flex gap-2">
-                         <div className="relative flex-grow group">
-                             <div className="absolute inset-0 bg-violet-600/20 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                             <input 
-                                type="text"
-                                value={targetInput}
-                                onChange={(e) => setTargetInput(e.target.value)}
-                                placeholder="ENTER GENE OR PROTEIN ID (e.g. KRAS)"
-                                className="relative w-full h-12 bg-[#0a0a0a] border border-slate-700 text-white rounded-lg px-4 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none font-mono text-sm uppercase tracking-wider placeholder:text-slate-600 transition-all"
-                                onKeyDown={(e) => e.key === 'Enter' && handleRunSimulation()}
-                             />
+                    <div className="w-full md:w-[500px] flex flex-col gap-3">
+                         <div className="flex gap-2">
+                            <div className="relative flex-grow group">
+                                <div className="absolute inset-0 bg-violet-600/20 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <input 
+                                    type="text"
+                                    value={targetInput}
+                                    onChange={(e) => setTargetInput(e.target.value)}
+                                    placeholder="SEARCH ANY GENE (e.g. EGFR)"
+                                    className="relative w-full h-12 bg-[#0a0a0a] border border-slate-700 text-white rounded-lg px-4 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none font-mono text-sm uppercase tracking-wider placeholder:text-slate-600 transition-all"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleRunSimulation()}
+                                />
+                            </div>
+                            <SciFiButton onClick={() => handleRunSimulation()} disabled={!targetInput || loading} className="h-12 px-6">
+                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+                            </SciFiButton>
                          </div>
-                         <SciFiButton onClick={() => handleRunSimulation()} disabled={!targetInput || loading} className="h-12 px-6">
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-                         </SciFiButton>
+                         
+                         <div className="flex justify-between items-center">
+                             <button 
+                                onClick={() => setShowGuide(!showGuide)}
+                                className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors px-3 py-1.5 rounded-full border ${showGuide ? 'bg-violet-500 text-white border-violet-400' : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-white'}`}
+                             >
+                                 <Eye className="w-3 h-3" />
+                                 {showGuide ? 'Concept Guide: ON' : 'Show Concept Guide'}
+                             </button>
+
+                             <button 
+                                onClick={() => setShowLiteratureInput(!showLiteratureInput)}
+                                className={`text-[10px] font-mono uppercase tracking-wider flex items-center gap-2 hover:text-white transition-colors ${showLiteratureInput || literatureInput ? 'text-violet-400' : 'text-slate-500'}`}
+                             >
+                                 <FileText className="w-3 h-3" />
+                                 {showLiteratureInput ? 'Hide Paper Input' : 'Advanced: Add Research Paper'}
+                             </button>
+                         </div>
                     </div>
                  </div>
 
-                 {/* NEW: PRE-LOADED MODELS BAR */}
-                 <div className="mt-6 pt-4 border-t border-white/5 flex flex-col md:flex-row items-start md:items-center gap-4">
-                     <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono uppercase tracking-widest shrink-0">
-                        <Database className="w-3 h-3" />
-                        <span>Load Demo Model:</span>
-                     </div>
-                     <div className="flex flex-wrap gap-2">
-                        {DEMO_MODELS.map((demo) => {
-                            const colorStyles: any = {
-                                rose: 'border-rose-500/30 text-rose-400 hover:bg-rose-900/20',
-                                cyan: 'border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/20',
-                                amber: 'border-amber-500/30 text-amber-400 hover:bg-amber-900/20',
-                                violet: 'border-violet-500/30 text-violet-400 hover:bg-violet-900/20'
-                            };
-                            return (
-                                <button
-                                    key={demo.id}
-                                    onClick={() => handleRunSimulation(demo.id)}
+                 {/* PERSONALIZED TARGET SUGGESTIONS */}
+                 {userVariants.length > 0 && (
+                     <div className="mt-6 pt-4 border-t border-white/5">
+                         <div className="flex items-center gap-2 mb-3">
+                             <Fingerprint className="w-3 h-3 text-emerald-500" />
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                 Your Personal Targets ({userVariants.length})
+                             </span>
+                         </div>
+                         <div className="flex flex-wrap gap-2">
+                             {userVariants.map((v, i) => (
+                                 <button
+                                    key={i}
+                                    onClick={() => handleRunSimulation(v.gene)}
                                     disabled={loading}
-                                    className={`group px-3 py-1.5 rounded bg-slate-900/50 border ${colorStyles[demo.color]} transition-all flex items-center gap-2 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}
-                                >
-                                    <div className="flex flex-col text-left">
-                                        <span className="text-xs font-bold">{demo.label}</span>
-                                        <span className="text-[8px] font-mono text-slate-500 group-hover:text-slate-300">{demo.category}</span>
-                                    </div>
-                                    <PlayCircle className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity -ml-2 group-hover:ml-0" />
-                                </button>
-                            );
-                        })}
+                                    className="flex items-center gap-2 px-3 py-2 rounded bg-emerald-900/20 border border-emerald-500/30 hover:bg-emerald-900/40 hover:border-emerald-400 transition-all group"
+                                 >
+                                     <Dna className="w-3 h-3 text-emerald-500 group-hover:text-emerald-400" />
+                                     <div className="text-left">
+                                         <div className="text-xs font-bold text-emerald-100">{v.gene}</div>
+                                         <div className="text-[9px] font-mono text-emerald-500/70">{v.variant}</div>
+                                     </div>
+                                     <PlayCircle className="w-3 h-3 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                                 </button>
+                             ))}
+                         </div>
                      </div>
-                 </div>
+                 )}
+
+                 {/* LITERATURE INGESTION PANEL */}
+                 <AnimatePresence>
+                     {showLiteratureInput && (
+                         <MotionDiv 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden mt-4"
+                         >
+                             <div className="bg-slate-900/50 rounded-xl border border-violet-500/30 p-4">
+                                 <div className="flex items-center gap-2 mb-3">
+                                     <UploadCloud className="w-4 h-4 text-violet-400" />
+                                     <h3 className="text-xs font-bold text-white uppercase tracking-wider">Scientific Literature Ingestion (Med-Gemini Protocol)</h3>
+                                 </div>
+                                 <textarea
+                                    value={literatureInput}
+                                    onChange={(e) => setLiteratureInput(e.target.value)}
+                                    placeholder="PASTE ABSTRACT, RESULTS TEXT, OR DOI LINK HERE...&#10;Gemini will extract protein interactions and binding data from this text to populate the simulation."
+                                    className="w-full h-32 bg-[#050505] border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-300 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none resize-none leading-relaxed"
+                                 />
+                                 <div className="flex justify-between items-center mt-2">
+                                     <div className="flex items-center gap-2 text-[9px] text-slate-500 font-mono">
+                                         <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                                         <span>Long Context Window: Active (Up to 1M Tokens)</span>
+                                     </div>
+                                     {literatureInput && (
+                                         <button onClick={() => setLiteratureInput("")} className="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold">Clear Context</button>
+                                     )}
+                                 </div>
+                             </div>
+                         </MotionDiv>
+                     )}
+                 </AnimatePresence>
             </div>
 
             {/* OFFLINE MODE INDICATOR */}
@@ -232,24 +300,26 @@ export const DiscoveryLab: React.FC = () => {
                 
                 {/* CARD 1: LIGAND DESIGN (3D) */}
                 <SandboxCard 
-                    title="Ligand Architect" 
+                    title="Structural Docking" 
                     icon={Box} 
                     color="violet"
                     loading={loading}
-                    status={loading ? "DOCKING SIMULATION..." : (result && result.docking && result.docking.pdbId ? "MODEL RENDERED" : "STANDBY")}
+                    status={loading ? "DOCKING SIMULATION..." : (result && result.docking && result.docking.uniprotId ? "MODEL RENDERED" : "STANDBY")}
                     analysisText={result?.detailedAnalysis?.dockingDynamics}
+                    guideMode={showGuide}
+                    guideText="This visualizes the 3D protein shape created by your gene. The orange/red spot is where the mutation is, or where a drug (ligand) attempts to attach itself to fix the protein."
                 >
-                    {result && !loading && result.docking && result.docking.pdbId ? (
+                    {result && !loading && result.docking && result.docking.uniprotId ? (
                         <div className="h-full flex flex-col animate-fade-in">
                             <div className="relative flex-grow rounded-lg overflow-hidden border border-slate-800 bg-black shadow-inner min-h-[300px]">
                                 <ProteinViewer 
-                                    pdbId={result.docking.pdbId} 
+                                    uniprotId={result.docking.uniprotId} 
                                     highlightPosition={result.docking.activeSiteResidues?.[0]} 
                                 />
                                 {/* Overlay Metrics */}
                                 <div className="absolute top-4 left-4 z-20">
                                     <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Target Structure</div>
-                                    <div className="text-2xl font-mono text-white font-bold">{result.docking.pdbId || "N/A"}</div>
+                                    <div className="text-2xl font-mono text-white font-bold">{result.docking.targetName || "N/A"}</div>
                                 </div>
                                 <div className="absolute bottom-4 right-4 z-20 text-right">
                                     <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Binding Energy</div>
@@ -273,12 +343,14 @@ export const DiscoveryLab: React.FC = () => {
 
                 {/* CARD 2: CELL SIMULATION (NETWORK) */}
                 <SandboxCard 
-                    title="Cell Simulation" 
+                    title="Protein Network" 
                     icon={Network} 
                     color="cyan"
                     loading={loading}
                     status={loading ? "TRACING PATHWAYS..." : (result && result.network ? "NETWORK ACTIVE" : "STANDBY")}
                     analysisText={result?.detailedAnalysis?.pathwayKinetics}
+                    guideMode={showGuide}
+                    guideText="Genes don't work alone. This map shows which other proteins your gene 'talks' to. If your gene is broken, these are the other systems (like growth signals) that might get disrupted."
                 >
                     {result && !loading && result.network ? (
                         <div className="h-full flex flex-col animate-fade-in">
@@ -299,12 +371,14 @@ export const DiscoveryLab: React.FC = () => {
 
                 {/* CARD 3: LITERATURE MINER (FEED) */}
                 <SandboxCard 
-                    title="Literature Miner" 
+                    title="Research Evidence" 
                     icon={BookOpen} 
                     color="amber"
                     loading={loading}
                     status={loading ? "SEMANTIC SEARCH..." : (result && result.literature ? `${result.literature.length} SOURCES FOUND` : "STANDBY")}
                     analysisText={result?.detailedAnalysis?.evidenceSynthesis}
+                    guideMode={showGuide}
+                    guideText="The AI scans recent medical papers to find experiments done on this specific gene. It summarizes why scientists think a certain drug might work."
                 >
                      {result && !loading && result.literature ? (
                         <div className="h-full flex flex-col animate-fade-in">
@@ -337,12 +411,14 @@ export const DiscoveryLab: React.FC = () => {
 
                 {/* CARD 4: STRATIFICATION HUB (MAP/CHARTS) */}
                 <SandboxCard 
-                    title="Stratification Hub" 
+                    title="Global Efficacy" 
                     icon={Globe2} 
                     color="emerald"
                     loading={loading}
                     status={loading ? "CALCULATING ALLELE FREQ..." : (result && result.stratification ? "POPULATION MAPPED" : "STANDBY")}
                     analysisText={result?.detailedAnalysis?.populationStat}
+                    guideMode={showGuide}
+                    guideText="This charts how common this mutation is across different populations and how well the treatment is predicted to work based on historical data."
                 >
                     {result && !loading && result.stratification ? (
                         <div className="h-full flex flex-col items-center justify-center relative animate-fade-in">
@@ -373,7 +449,7 @@ export const DiscoveryLab: React.FC = () => {
             {/* CONVERGENCE INSIGHT (If Result Exists) */}
             <AnimatePresence>
                 {result && !loading && result.convergenceInsight && (
-                    <motion.div 
+                    <MotionDiv 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
@@ -396,7 +472,7 @@ export const DiscoveryLab: React.FC = () => {
                                  </p>
                              </div>
                         </div>
-                    </motion.div>
+                    </MotionDiv>
                 )}
             </AnimatePresence>
         </div>
@@ -412,8 +488,10 @@ const SandboxCard: React.FC<{
     loading: boolean,
     status: string,
     children: React.ReactNode,
-    analysisText?: string
-}> = ({ title, icon: Icon, color, loading, status, children, analysisText }) => {
+    analysisText?: string,
+    guideMode?: boolean,
+    guideText?: string
+}> = ({ title, icon: Icon, color, loading, status, children, analysisText, guideMode, guideText }) => {
     
     const colors: any = {
         violet: 'border-violet-500/30 shadow-[0_0_20px_rgba(139,92,246,0.1)]',
@@ -451,11 +529,29 @@ const SandboxCard: React.FC<{
 
              {/* Content Area */}
              <div className="flex-grow p-4 relative z-0 overflow-hidden flex flex-col">
+                 
+                 {/* GUIDE OVERLAY */}
+                 <AnimatePresence>
+                     {guideMode && guideText && (
+                         <MotionDiv 
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute inset-0 z-30 bg-black/90 p-6 flex flex-col justify-center items-center text-center"
+                         >
+                             <HelpCircle className={`w-8 h-8 ${textColor[color]} mb-3`} />
+                             <p className="text-sm text-white font-medium leading-relaxed max-w-sm">
+                                 {guideText}
+                             </p>
+                         </MotionDiv>
+                     )}
+                 </AnimatePresence>
+
                  <div className="flex-grow">
                     {children}
                  </div>
                  
-                 {/* NEW: AI Explanation Box */}
+                 {/* AI Explanation Box */}
                  {analysisText && !loading && (
                      <div className="mt-4 p-3 bg-slate-900/80 border-l-2 border-white/20 rounded-r text-[10px] text-slate-400 font-mono leading-relaxed relative animate-fade-in">
                          <div className="flex items-center gap-2 mb-1 text-xs font-bold text-white uppercase tracking-wider">

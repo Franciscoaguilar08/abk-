@@ -139,15 +139,19 @@ export const VariantCard: React.FC<VariantCardProps> = ({ variant }) => {
             </div>
 
             {/* REAL 3D Protein Viewer or Fallback */}
-            {xai.pdbId && xai.variantPosition ? (
+            {(xai.uniprotId || xai.pdbId) && xai.variantPosition ? (
                 <div className="mt-4">
                     <div className="flex items-center gap-2 mb-2">
                         <BrainCircuit className="w-3 h-3 text-red-400" />
-                        <span className="text-[10px] font-bold text-red-300 uppercase tracking-wider">Structural Hotspot</span>
+                        <span className="text-[10px] font-bold text-red-300 uppercase tracking-wider">AlphaFold Structure</span>
                     </div>
-                    <ProteinViewer pdbId={xai.pdbId} highlightPosition={xai.variantPosition} />
+                    <ProteinViewer 
+                        pdbId={xai.pdbId} 
+                        uniprotId={xai.uniprotId} 
+                        highlightPosition={xai.variantPosition} 
+                    />
                     <p className="text-[10px] text-slate-500 mt-2 text-center">
-                        Red sphere indicates exact mutation site ({xai.variantPosition}) on PDB structure {xai.pdbId}.
+                        Red sphere indicates exact mutation site ({xai.variantPosition}) on {xai.uniprotId ? `AlphaFold Model ${xai.uniprotId}` : `structure ${xai.pdbId}`}.
                     </p>
                 </div>
             ) : (

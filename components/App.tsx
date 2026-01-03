@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { analyzeGenomicData } from './services/geminiService';
 import { generateClinicalReport } from './services/pdfService';
@@ -706,9 +707,9 @@ const App: React.FC = () => {
             )}
         </div>
 
-        {/* MODULE B: DISCOVERY LAB */}
+        {/* MODULE B: DISCOVERY LAB - PASSING USER VARIANTS */}
         <div className={activeModule === 'DISCOVERY' ? 'block' : 'hidden'}>
-             <DiscoveryLab />
+             <DiscoveryLab userVariants={result?.variants || []} />
         </div>
 
       </main>

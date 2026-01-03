@@ -1,88 +1,111 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, VariantRiskLevel, MetabolizerStatus, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
+import { AnalysisResult, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// USO MODELO FLASH PARA VELOCIDAD Y ESTABILIDAD (SEGÚN REQUERIMIENTO DE ROBUSTEZ)
 const modelId = "gemini-3-flash-preview"; 
 
-/**
- * Utility to yield control back to the main thread to prevent UI freezing.
- */
+const getAIInstance = () => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY' || apiKey.includes('YOUR_KEY')) {
+        throw new Error("SIMULATION_MODE_TRIGGER");
+    }
+    return new GoogleGenAI({ apiKey: apiKey });
+};
+
 const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// Helper: Extract rsIDs using Regex (Faster and more reliable for DB lookup)
+const extractRsIdsRegex = (text: string): string[] => {
+    const regex = /rs\d+/g;
+    const matches = text.match(regex);
+    return matches ? [...new Set(matches)] : [];
+};
+
 /**
- * Helper to safely parse JSON from AI response.
- * Includes aggressive cleaning for markdown blocks.
+ * ROBUST JSON EXTRACTOR
+ * Uses a stack-based approach to find the largest valid JSON object/array wrapper
+ * ignoring surrounding chat text.
  */
 const cleanAndParseJSON = (text: string) => {
-  if (!text) throw new Error("Recibido texto vacío de la IA");
+  if (!text) throw new Error("Empty AI response");
 
-  // 1. Eliminar bloques de markdown
-  let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  // 1. Basic Clean
+  let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
   
-  // 2. Encontrar el objeto/array JSON válido más externo
-  const firstBrace = clean.indexOf('{');
-  const firstBracket = clean.indexOf('[');
-  let start = -1;
-  let end = -1;
+  // 2. Extract First Valid JSON Block
+  let firstOpen = clean.indexOf('{');
+  let firstArray = clean.indexOf('[');
+  let startIndex = -1;
+  let isArray = false;
 
-  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
-      start = firstBrace;
-      end = clean.lastIndexOf('}');
-  } else if (firstBracket !== -1) {
-      start = firstBracket;
-      end = clean.lastIndexOf(']');
+  if (firstOpen !== -1 && (firstArray === -1 || firstOpen < firstArray)) {
+      startIndex = firstOpen;
+  } else if (firstArray !== -1) {
+      startIndex = firstArray;
+      isArray = true;
   }
 
-  if (start !== -1 && end !== -1 && end > start) {
-      clean = clean.substring(start, end + 1);
+  if (startIndex === -1) {
+      // Last ditch effort: try parsing the whole string in case it's clean
+      try { return JSON.parse(clean); } catch(e) { throw new Error("No JSON object found in response"); }
   }
+
+  // 3. Stack Parser to find matching closing bracket
+  let openChar = isArray ? '[' : '{';
+  let closeChar = isArray ? ']' : '}';
+  let balance = 0;
+  let endIndex = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = startIndex; i < clean.length; i++) {
+      const char = clean[i];
+      
+      if (escape) {
+          escape = false;
+          continue;
+      }
+      if (char === '\\') {
+          escape = true;
+          continue;
+      }
+      if (char === '"') {
+          inString = !inString;
+          continue;
+      }
+
+      if (!inString) {
+          if (char === openChar) {
+              balance++;
+          } else if (char === closeChar) {
+              balance--;
+              if (balance === 0) {
+                  endIndex = i;
+                  break;
+              }
+          }
+      }
+  }
+
+  if (endIndex !== -1) {
+      clean = clean.substring(startIndex, endIndex + 1);
+  }
+
+  // 4. Sanitize Common LLM JSON Errors
+  // Remove comments //
+  clean = clean.replace(/\/\/.*$/gm, '');
+  // Remove trailing commas before closing braces
+  clean = clean.replace(/,(\s*[}\]])/g, '$1');
 
   try {
     return JSON.parse(clean);
   } catch (e) {
-    console.warn("Error de parseo JSON inicial. Intentando reparación...", e);
-    // Intento desesperado de reparación de comas
-    try {
-        let repaired = clean.replace(/,\s*([\]}])/g, '$1'); // Eliminar comas trailing
-        return JSON.parse(repaired);
-    } catch (repairErr) {
-        throw new Error("La respuesta de la IA no es un JSON válido.");
-    }
+    console.error("JSON Parse Failed on:", clean);
+    throw new Error("Invalid JSON format");
   }
 };
 
-// --- STEP 1: PARSE RAW TEXT TO IDENTIFY VARIANTS ---
-const extractVariantsPrompt = async (input: string) => {
-    const prompt = `
-    Extract genomic variants from the text below. 
-    Return a JSON array of objects with fields: 'rsId' (e.g. rs12345), 'gene' (e.g. BRCA1).
-    Input:
-    ${input.substring(0, 5000)}
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: modelId,
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                temperature: 0.1, // Baja temperatura para extracción precisa
-            }
-        });
-        
-        if(!response.text) return [];
-        return cleanAndParseJSON(response.text) as { rsId: string, gene: string }[];
-    } catch(e) {
-        console.warn("Fallo en extracción de variantes (paso 1), continuando...", e);
-        return [];
-    }
-};
-
-// --- MODULE A: CLINICAL ANALYSIS ---
 export const analyzeGenomicData = async (
   genomicInput: string, 
   focusList: AnalysisFocus[] = ['COMPREHENSIVE'],
@@ -90,85 +113,80 @@ export const analyzeGenomicData = async (
   onStatusUpdate?: (status: string) => void
 ): Promise<AnalysisResult> => {
 
-  if(onStatusUpdate) onStatusUpdate("Iniciando Protocolo de Verdad Biológica...");
+  try {
+      getAIInstance();
+  } catch (e) {
+      throw new Error("SIMULATION_MODE_TRIGGER");
+  }
+
+  // --- STEP 1: EXTRACTION ---
+  if(onStatusUpdate) onStatusUpdate("Escaneando secuencia en busca de variantes (rsID)...");
   await yieldToMain();
   
-  // 1. Extracción con manejo de errores
-  let extractedVariants: { rsId: string, gene: string }[] = [];
-  try {
-      extractedVariants = await extractVariantsPrompt(genomicInput);
-  } catch (e) {
-      console.warn("Extracción fallida, usando input crudo");
-  }
-  
-  if(onStatusUpdate) onStatusUpdate("Consultando bases de datos (ClinVar / gnomAD)...");
+  let rsIds = extractRsIdsRegex(genomicInput);
+
+  // --- STEP 2: REAL DATA RETRIEVAL ---
+  if(onStatusUpdate) onStatusUpdate(`Consultando bases de datos biomédicas en tiempo real (${rsIds.length} variantes)...`);
   await yieldToMain();
 
-  // 2. Enriquecimiento (No falla si la API externa cae, solo retorna vacío)
-  const rsIds = extractedVariants.map(v => v.rsId).filter(id => id && id.startsWith('rs'));
-  let realDataContext = "No external data available.";
-  
+  let realContext = "No external database records found. Relying on internal knowledge base.";
+  let rawDbData: any[] = [];
+
   if (rsIds.length > 0) {
       try {
-          const realDataResults = await batchFetchVariantData(rsIds);
-          const realDataMap = new Map();
-          realDataResults.forEach(d => realDataMap.set(d.rsId, d));
-          
-          realDataContext = extractedVariants.map(v => {
-              const real = realDataMap.get(v.rsId);
-              return real ? `Variant: ${v.rsId} (Gene: ${real.geneSymbol}). ClinVar: ${real.clinVarSignificance}. CADD: ${real.caddPhred}.` 
-                          : `Variant: ${v.rsId}`;
-          }).join("\n");
+          rawDbData = await batchFetchVariantData(rsIds.slice(0, 50)); 
+          if (rawDbData.length > 0) {
+               realContext = JSON.stringify(rawDbData.map(d => ({
+                   id: d.rsId,
+                   gene: d.geneSymbol,
+                   clinvar: d.clinVarSignificance, 
+                   freq: d.gnomadFreq,
+                   cadd: d.caddPhred
+               })), null, 2);
+          }
       } catch (e) {
-          console.warn("Fallo en MyVariant.info, continuando con IA pura.");
+          console.error("Bioinformatics fetch failed", e);
       }
   }
 
-  if(onStatusUpdate) onStatusUpdate("Ejecutando simulación AlphaMissense...");
-
-  // 3. Prompt Maestro
+  // --- STEP 3: SYNTHESIS ---
+  if(onStatusUpdate) onStatusUpdate("Verificando interacciones medicamentosas con Google Search...");
+  
   const systemInstruction = `
-    ESTRICTO PROTOCOLO BIOINFORMÁTICO ABK (DIGITAL TWIN ENGINE):
-
-    1. VERACIDAD CIENTÍFICA (HARD DATA):
-       - Prioriza los datos de ClinVar y gnomAD provistos.
-       - Si no hay datos, realiza una inferencia biofísica conservadora.
-
-    2. ALPHAMISSENSE & BIOFÍSICA:
-       Para variantes VUS, aplica lógica de DeepMind AlphaMissense.
-       Escala: >0.564 (Patogénico), <0.34 (Benigno).
-
-    3. FORMATO VISUAL (CASCADA DE CONSECUENCIAS):
-       En 'structuralMechanism' (xai), USA FLECHAS:
-       [Cambio Molecular] ➔ [Efecto Estructural] ➔ [Impacto en Dominio] ➔ [Consecuencia Clínica]
-
-    4. ACTIONABLE INTELLIGENCE:
-       Rellena nDimensionalAnalysis con planes concretos.
+    ROLE: You are an expert Clinical Genomicist.
+    TASK: Analyze the provided genomic data and database context.
+    DATA: Use the 'REAL DATABASE CONTEXT' as the primary source of truth for variant classification.
+    OUTPUT: Valid JSON matching the schema strictly.
   `;
 
   const prompt = `
-    Analyze these variants based on available data:
-    ${realDataContext}
-    Raw Input: ${genomicInput.substring(0, 1000)}
-    
-    Generate JSON Response.
+  INPUT GENOMIC DATA: ${genomicInput.substring(0, 500)}...
+  REAL DB CONTEXT: ${realContext}
+  FOCUS: ${focusList.join(', ')}
+  ANCESTRY: ${ancestry}
+  
+  INSTRUCTIONS:
+  - If ClinVar says 'Pathogenic', mark riskLevel 'HIGH'.
+  - Verify drug interactions for Pharmacogenomics using Google Search if needed.
+  - Return JSON.
   `;
 
-  // 4. LÓGICA DE REINTENTO (RETRY LOGIC) BLINDADA
   let retryCount = 0;
-  const maxRetries = 3;
+  const maxRetries = 2;
 
   while (retryCount < maxRetries) {
     try {
+        const ai = getAIInstance();
+        
         const response = await ai.models.generateContent({
             model: modelId,
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
+                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json",
                 maxOutputTokens: 8192, 
                 temperature: 0.1,
-                // Schema simplificado para reducir tokens y errores de estructura
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
@@ -179,18 +197,7 @@ export const analyzeGenomicData = async (
                         properties: {
                             clinicalSummary: { type: Type.STRING },
                             overallRiskLevel: { type: Type.STRING },
-                            actionPlan: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        title: { type: Type.STRING },
-                                        priority: { type: Type.STRING },
-                                        description: { type: Type.STRING },
-                                        specialistReferral: { type: Type.STRING }
-                                    }
-                                }
-                            },
+                            actionPlan: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, priority: { type: Type.STRING }, description: { type: Type.STRING }, specialistReferral: { type: Type.STRING } } } },
                             lifestyleModifications: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { category: {type:Type.STRING}, recommendation: {type:Type.STRING}, impactLevel: {type:Type.STRING} } } },
                             surveillancePlan: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { procedure: {type:Type.STRING}, frequency: {type:Type.STRING}, startAge: {type:Type.STRING} } } }
                         }
@@ -210,11 +217,23 @@ export const analyzeGenomicData = async (
                             populationFrequency: { type: Type.STRING },
                             caddScore: { type: Type.NUMBER },
                             revelScore: { type: Type.NUMBER },
-                            xai: { type: Type.OBJECT, properties: { pathogenicityScore: {type:Type.NUMBER}, structuralMechanism: {type:Type.STRING}, molecularFunction: {type:Type.STRING}, pdbId: {type:Type.STRING}, variantPosition: {type:Type.NUMBER} } }
+                            xai: { type: Type.OBJECT, properties: { pathogenicityScore: {type:Type.NUMBER}, structuralMechanism: {type:Type.STRING}, molecularFunction: {type:Type.STRING}, uniprotId: {type:Type.STRING}, variantPosition: {type:Type.NUMBER} } }
                           }
                         }
                       },
-                      pharmaProfiles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { gene: {type:Type.STRING}, phenotype: {type:Type.STRING}, description: {type:Type.STRING}, interactions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { drugName: {type:Type.STRING}, implication: {type:Type.STRING}, severity: {type:Type.STRING} } } } } } },
+                      pharmaProfiles: { 
+                          type: Type.ARRAY, 
+                          items: { 
+                              type: Type.OBJECT, 
+                              properties: { 
+                                  gene: {type:Type.STRING}, 
+                                  phenotype: {type:Type.STRING}, 
+                                  description: {type:Type.STRING}, 
+                                  interactions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { drugName: {type:Type.STRING}, implication: {type:Type.STRING}, severity: {type:Type.STRING} } } },
+                                  sources: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: {type:Type.STRING}, url: {type:Type.STRING} } } } 
+                              } 
+                          } 
+                      },
                       oncologyProfiles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { gene: {type:Type.STRING}, variant: {type:Type.STRING}, evidenceTier: {type:Type.STRING}, mechanismOfAction: {type:Type.STRING}, cancerHallmark: {type:Type.STRING}, therapeuticImplications: {type:Type.ARRAY, items: {type:Type.STRING}}, riskScore: {type:Type.NUMBER}, citation: {type:Type.STRING}, functionalCategory: {type:Type.STRING} } } },
                       phenotypeTraits: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { trait: {type:Type.STRING}, category: {type:Type.STRING}, prediction: {type:Type.STRING}, confidence: {type:Type.STRING}, description: {type:Type.STRING}, gene: {type:Type.STRING} } } }
                     }
@@ -222,76 +241,99 @@ export const analyzeGenomicData = async (
             }
         });
 
-        if (!response.text) throw new Error("Respuesta vacía de Gemini");
-
+        if (!response.text) throw new Error("Empty AI Response");
         const parsed = cleanAndParseJSON(response.text);
         
-        // Mapeo seguro con defaults para evitar crash en UI
-        return {
-            patientSummary: parsed.patientSummary || "Analysis complete.",
-            overallRiskScore: parsed.overallRiskScore || 0,
-            equityAnalysis: parsed.equityAnalysis,
-            nDimensionalAnalysis: parsed.nDimensionalAnalysis || { clinicalSummary: "No specific action plan.", overallRiskLevel: "LOW", actionPlan: [], lifestyleModifications: [], surveillancePlan: [] },
-            variants: (parsed.variants || []).map((v: any) => ({
-                ...v,
-                riskLevel: v.riskLevel || 'UNCERTAIN',
-                clinVarSignificance: v.clinVarSignificance || 'Unknown',
-                category: 'GENERAL'
-            })),
-            pharmaProfiles: parsed.pharmaProfiles || [],
-            oncologyProfiles: parsed.oncologyProfiles || [],
-            phenotypeTraits: parsed.phenotypeTraits || [],
-        } as AnalysisResult;
+        // Data Injection
+        const enhancedVariants = (parsed.variants || []).map((v: any) => {
+             const real = rawDbData.find(r => r.rsId === v.variant || (v.variant && v.variant.includes(r.rsId)));
+             if (real) {
+                 return {
+                     ...v,
+                     clinVarSignificance: real.clinVarSignificance || v.clinVarSignificance,
+                     caddScore: real.caddPhred || v.caddScore,
+                     populationFrequency: real.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency
+                 }
+             }
+             return v;
+        });
 
-    } catch (e) {
-        console.warn(`Intento ${retryCount + 1} fallido: `, e);
+        return { ...parsed, variants: enhancedVariants } as AnalysisResult;
+
+    } catch (e: any) {
+        if (e.message === 'SIMULATION_MODE_TRIGGER') throw e;
+        console.warn(`Retry ${retryCount + 1}`, e);
         retryCount++;
-        if (retryCount === maxRetries) {
-            throw new Error("CONNECTION_FAILED"); // Código específico para activar modo offline
-        }
-        await new Promise(r => setTimeout(r, 1500)); // Backoff un poco más largo
+        if (retryCount === maxRetries) throw new Error("CONNECTION_FAILED");
+        await new Promise(r => setTimeout(r, 1000));
     }
   }
-  
   throw new Error("Unexpected error");
 };
 
-// --- MODULE B: R&D DISCOVERY ANALYSIS ---
 export const analyzeDiscoveryData = async (
     targetInput: string,
+    literatureContext?: string, 
     onStatusUpdate?: (status: string) => void
 ): Promise<SandboxResult> => {
-    if (onStatusUpdate) onStatusUpdate("Initializing R&D Sandbox Environment...");
+    
+    if (onStatusUpdate) onStatusUpdate("Initializing R&D Sandbox...");
     await yieldToMain();
 
-    // Versión simplificada para Discovery (usa la misma lógica de retry interna si se extrajera, pero aquí la duplicamos brevemente por simplicidad)
-    const prompt = `Target: ${targetInput}. Generate R&D analysis JSON with deep scientific 'detailedAnalysis'. Use real PDB IDs.`;
+    const ai = getAIInstance();
+    const safeContext = literatureContext ? literatureContext.substring(0, 60000) : "";
+
+    const systemInstruction = `
+        ROLE: Expert Bio-Curator and Structural Biologist.
+        TASK: Generate valid JSON for Target Discovery.
+        FORMAT: JSON ONLY.
+        
+        REQUIRED STRUCTURE:
+        {
+            "targetId": "string",
+            "hypothesis": "string",
+            "docking": { 
+                "targetName": "string", 
+                "uniprotId": "string (Valid UniProt ID, e.g. P01116)", 
+                "ligandName": "string", 
+                "bindingEnergy": number, 
+                "activeSiteResidues": [number] 
+            },
+            "network": { 
+                "nodes": [{ "id": "string", "group": "GENE"|"PROTEIN"|"METABOLITE", "impactScore": number }], 
+                "links": [{ "source": "string", "target": "string", "interactionType": "ACTIVATION"|"INHIBITION" }] 
+            },
+            "literature": [{ "title": "string", "source": "string", "summary": "string", "relevanceScore": number }],
+            "stratification": [{ "population": "string", "alleleFrequency": number, "predictedEfficacy": number }],
+            "convergenceInsight": "string",
+            "detailedAnalysis": { "dockingDynamics": "string", "pathwayKinetics": "string", "evidenceSynthesis": "string", "populationStat": "string" }
+        }
+    `;
+
+    const prompt = `
+        TARGET: ${targetInput}
+        CONTEXT: ${safeContext || "None. Infer from biological knowledge."}
+        
+        Generate realistic discovery data. 
+        IMPORTANT: 'docking.uniprotId' MUST be a real, valid UniProt Accession (e.g. P01116 for KRAS) for AlphaFold visualization.
+    `;
     
     try {
         const response = await ai.models.generateContent({
           model: modelId,
           contents: prompt,
           config: {
+            systemInstruction: systemInstruction,
             responseMimeType: "application/json",
-            temperature: 0.2, // Un poco más creativo para hipótesis
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    targetId: { type: Type.STRING },
-                    hypothesis: { type: Type.STRING },
-                    docking: { type: Type.OBJECT, properties: { targetName: {type:Type.STRING}, pdbId: {type:Type.STRING}, ligandName: {type:Type.STRING}, bindingEnergy: {type:Type.NUMBER}, activeSiteResidues: {type:Type.ARRAY, items: {type:Type.NUMBER}} } },
-                    network: { type: Type.OBJECT, properties: { nodes: {type:Type.ARRAY, items: {type:Type.OBJECT, properties: { id: {type:Type.STRING}, group: {type:Type.STRING}, impactScore: {type:Type.NUMBER} } } }, links: {type:Type.ARRAY, items: {type:Type.OBJECT, properties: { source: {type:Type.STRING}, target: {type:Type.STRING}, interactionType: {type:Type.STRING} } } } } },
-                    literature: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: {type:Type.STRING}, source: {type:Type.STRING}, summary: {type:Type.STRING}, relevanceScore: {type:Type.NUMBER} } } },
-                    stratification: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { population: {type:Type.STRING}, alleleFrequency: {type:Type.NUMBER}, predictedEfficacy: {type:Type.NUMBER} } } },
-                    convergenceInsight: { type: Type.STRING },
-                    detailedAnalysis: { type: Type.OBJECT, properties: { dockingDynamics: {type:Type.STRING}, pathwayKinetics: {type:Type.STRING}, evidenceSynthesis: {type:Type.STRING}, populationStat: {type:Type.STRING} } }
-                }
-            }
+            temperature: 0.2, 
+            maxOutputTokens: 8192, 
           }
         });
+        
         if (!response.text) throw new Error("Simulation failed.");
         return cleanAndParseJSON(response.text) as SandboxResult;
     } catch (e: any) {
-        throw e; // El componente DiscoveryLab maneja esto activando su modo offline
+        console.error("Gemini R&D API Error:", e);
+        throw e;
     }
 };

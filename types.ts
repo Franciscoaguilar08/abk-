@@ -50,7 +50,8 @@ export interface XAIAnalysis {
   structuralMechanism: string; // e.g., "Destabilizes alpha-helix structure"
   molecularFunction: string; // e.g., "DNA binding domain"
   conservationScore: number; // e.g., PhyloP score simulation (0-10)
-  pdbId?: string; // REAL PDB Structure ID (e.g. "4IBQ")
+  pdbId?: string; // Legacy PDB Structure ID
+  uniprotId?: string; // NEW: AlphaFold UniProt ID (e.g. "P04637")
   variantPosition?: number; // Integer position for 3D highlighting
   attentionMap: AttentionPoint[]; // Simulated Transformer Attention Weights
 }
@@ -74,11 +75,19 @@ export interface VariantAnalysis {
   xai?: XAIAnalysis; // New Field for Explainable AI
 }
 
+// Updated Pharma Profile with Grounding Sources
+export interface VerifiedSource {
+    title: string;
+    url: string;
+    snippet?: string;
+}
+
 export interface PharmaProfile {
   gene: string;
   phenotype: MetabolizerStatus;
   description: string;
   interactions: DrugInteraction[];
+  sources?: VerifiedSource[]; // NEW: For Google Search Grounding
 }
 
 // Updated Oncology Profile for Molecular Pathology
@@ -164,7 +173,8 @@ export interface AnalysisResult {
 
 export interface DockingSimulation {
     targetName: string;
-    pdbId: string; 
+    pdbId?: string; // Legacy
+    uniprotId: string; // New AlphaFold Target
     ligandName: string;
     bindingEnergy: number; 
     activeSiteResidues: number[];
