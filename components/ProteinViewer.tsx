@@ -86,15 +86,14 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                     pdbData = await fetchStructureData(targetId, source);
                     setResolvedSource(source); // Update if successful
                 } catch (afError) {
-                    console.warn(`Fetch failed for ${targetId} on ${source}. Switching strategy.`);
-                    
-                    // Fallback Switch: If AlphaFold fails, assume PDB ID and vice-versa
+                    // Silent retry logic
                     const fallbackSource = source === 'ALPHAFOLD' ? 'RCSB_PDB' : 'ALPHAFOLD';
                     try {
                         pdbData = await fetchStructureData(targetId, fallbackSource);
                         setResolvedSource(fallbackSource);
                     } catch (fallbackError) {
-                        throw afError; // Throw original error if both fail
+                        // Only throw if both fail
+                        throw afError; 
                     }
                 }
 
@@ -149,8 +148,13 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                 viewer.render();
                 viewer.spin('y', 0.15);
 
-            } catch (e) {
-                console.error("3D Render Error:", e);
+            } catch (e: any) {
+                // Graceful error handling - avoid loud console errors for expected 404s
+                if (e.message && e.message.includes('not found')) {
+                    console.warn(`3D Viewer: ${e.message}`);
+                } else {
+                    console.error("3D Render Error:", e);
+                }
                 setError(true);
                 setLoading(false);
             }
@@ -171,7 +175,9 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                 <div className="text-center">
                     <div className="text-xs font-mono uppercase text-amber-500">Structure Unavailable</div>
                     <div className="text-[10px] text-slate-600 mt-1 max-w-[200px]">
-                        Could not resolve 3D model for ID: <span className="text-slate-400 font-bold">{resolvedId}</span>
+                        Could not resolve 3D model for ID: <span className="text-slate-400 font-bold">{resolvedId}</span>.
+                        <br/>
+                        <span className="opacity-50">Entry might not exist in AlphaFold/PDB.</span>
                     </div>
                 </div>
             </div>

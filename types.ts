@@ -71,6 +71,15 @@ export interface VariantAnalysis {
   caddScore?: number; // Real CADD Phred Score
   revelScore?: number; // Real REVEL Score (0-1)
   
+  // Zygosity & Inheritance Logic
+  zygosity?: 'HETEROZYGOUS' | 'HOMOZYGOUS' | 'HEMIZYGOUS' | 'UNKNOWN';
+  inheritanceMode?: 'AUTOSOMAL_RECESSIVE' | 'AUTOSOMAL_DOMINANT' | 'X_LINKED' | 'MULTIFACTORIAL' | 'UNKNOWN';
+  clinicalStatus?: 'AFFECTED' | 'CARRIER' | 'UNCERTAIN'; 
+
+  // NEW: Penetrance Logic
+  penetrance?: 'COMPLETE' | 'HIGH' | 'MODERATE' | 'LOW' | 'UNKNOWN';
+  penetranceDescription?: string; // e.g. "Only 20% of carriers develop symptoms (Reduced Penetrance)"
+
   equityAdjustment?: string;
   xai?: XAIAnalysis; // New Field for Explainable AI
 }

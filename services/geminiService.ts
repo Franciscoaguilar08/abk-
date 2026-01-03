@@ -24,16 +24,9 @@ const extractRsIdsRegex = (text: string): string[] => {
 
 /**
  * ATTEMPT TO REPAIR MALFORMED JSON
- * Common LLM errors: truncated output, unescaped quotes, trailing commas.
  */
 const jsonRepair = (jsonStr: string): string => {
     let repaired = jsonStr.trim();
-    
-    // 1. Fix truncated URL/String at the end
-    // Check if it ends with an open quote or inside a string
-    // This is hard to do perfectly without a parser, but we can try simple heuristics
-    
-    // 2. Close open braces/brackets
     const openBraces = (repaired.match(/{/g) || []).length;
     const closeBraces = (repaired.match(/}/g) || []).length;
     const openBrackets = (repaired.match(/\[/g) || []).length;
@@ -45,10 +38,7 @@ const jsonRepair = (jsonStr: string): string => {
     if (openBrackets > closeBrackets) {
         repaired += "]".repeat(openBrackets - closeBrackets);
     }
-
-    // 3. Remove trailing commas before closing braces (Common LLM error)
     repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
-
     return repaired;
 };
 
@@ -57,11 +47,8 @@ const jsonRepair = (jsonStr: string): string => {
  */
 const cleanAndParseJSON = (text: string) => {
   if (!text) throw new Error("Empty AI response");
-
-  // 1. Basic Clean (Markdown)
   let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
   
-  // 2. Extract First Valid JSON Block (Start to End)
   const firstOpen = clean.indexOf('{');
   const firstArray = clean.indexOf('[');
   let startIndex = -1;
@@ -75,12 +62,9 @@ const cleanAndParseJSON = (text: string) => {
   }
 
   if (startIndex === -1) {
-      // Try parsing the whole thing as a fallback
       try { return JSON.parse(clean); } catch(e) { throw new Error("No JSON object found"); }
   }
 
-  // 3. Stack Parser to find the matching closing bracket
-  // This allows us to ignore text *after* the JSON
   let openChar = isArray ? '[' : '{';
   let closeChar = isArray ? ']' : '}';
   let balance = 0;
@@ -90,40 +74,23 @@ const cleanAndParseJSON = (text: string) => {
 
   for (let i = startIndex; i < clean.length; i++) {
       const char = clean[i];
-      
-      if (escape) {
-          escape = false;
-          continue;
-      }
-      if (char === '\\') {
-          escape = true;
-          continue;
-      }
-      if (char === '"') {
-          inString = !inString;
-          continue;
-      }
-
+      if (escape) { escape = false; continue; }
+      if (char === '\\') { escape = true; continue; }
+      if (char === '"') { inString = !inString; continue; }
       if (!inString) {
-          if (char === openChar) {
-              balance++;
-          } else if (char === closeChar) {
+          if (char === openChar) balance++;
+          else if (char === closeChar) {
               balance--;
-              if (balance === 0) {
-                  endIndex = i;
-                  break;
-              }
+              if (balance === 0) { endIndex = i; break; }
           }
       }
   }
 
-  // Use extracted block or full string if stack failed (e.g. truncated)
   let jsonString = (endIndex !== -1) ? clean.substring(startIndex, endIndex + 1) : clean.substring(startIndex);
 
   try {
     return JSON.parse(jsonString);
   } catch (e) {
-    // 4. If parse fails, try repair
     console.warn("JSON Parse failed, attempting repair...");
     try {
         const repaired = jsonRepair(jsonString);
@@ -139,6 +106,7 @@ export const analyzeGenomicData = async (
   genomicInput: string, 
   focusList: AnalysisFocus[] = ['COMPREHENSIVE'],
   ancestry: AncestryGroup = AncestryGroup.GLOBAL,
+  calibrationData: string | null = null,
   onStatusUpdate?: (status: string) => void
 ): Promise<AnalysisResult> => {
 
@@ -178,25 +146,59 @@ export const analyzeGenomicData = async (
       }
   }
 
-  // --- STEP 3: SYNTHESIS ---
-  if(onStatusUpdate) onStatusUpdate("Verificando interacciones medicamentosas con Google Search...");
+  // --- STEP 3: SYNTHESIS WITH ZYGOSITY & PENETRANCE LOGIC ---
+  if(onStatusUpdate) onStatusUpdate("Aplicando Lógica de Zigosidad, Penetrancia y Mendel...");
   
   const systemInstruction = `
-    ROLE: You are an expert Clinical Genomicist.
-    TASK: Analyze the provided genomic data and database context.
-    DATA: Use the 'REAL DATABASE CONTEXT' as the primary source of truth for variant classification.
+    ROLE: You are an expert Clinical Genomicist and Structural Biologist.
+    TASK: Analyze genomic data to produce a clinical report.
+    
+    CRITICAL RULE 1: MENDELIAN INHERITANCE & ZYGOSITY
+    - Extract zygosity from input (VCF '0/1' = Heterozygous, '1/1' = Homozygous). 
+    - OVERRIDE INSTRUCTION: If input starts with '## OVERRIDE_ZYGOSITY_CONTEXT: [VALUE] ##', apply this zygosity to ALL variants.
+    
+    CRITICAL RULE 2: PENETRANCE LOGIC (The "Frequency Proxy")
+    You must calculate a 'penetrance' level for every variant.
+    
+    A) MATHEMATICAL CHECK:
+       If Population Frequency (gnomAD/MAF) is > 0.01 (1%) AND the condition is severe/lethal:
+       -> FORCE PENETRANCE = 'LOW' (or 'MODERATE').
+       -> RATIONALE: Lethal diseases cannot be common. High frequency implies low penetrance (e.g. HFE C282Y).
+       
+    B) INTERNAL KNOWLEDGE CHECK:
+       Query your internal database for the specific Gene/Variant.
+       - HFE (Hemochromatosis): Low Penetrance.
+       - LRRK2 (Parkinson's): Incomplete Penetrance.
+       - GBA (Gaucher/Parkinson's): Incomplete Penetrance.
+       - BRCA1/2: High Penetrance (but not 100%).
+       
+    C) OUTPUT LOGIC:
+       If Penetrance is 'LOW' or 'MODERATE', the 'riskLevel' should generally NOT be 'CRITICAL/HIGH' for a Healthy Carrier, even if ClinVar says Pathogenic. Lower the alarm level.
+
+    LOGIC FOR CLINICAL STATUS:
+    1. RECESSIVE (e.g. CFTR): Heterozygous = "CARRIER" (Healthy). Homozygous = "AFFECTED".
+    2. DOMINANT (e.g. BRCA1): Heterozygous = "AFFECTED" (Risk).
+    3. COMPLEX (e.g. MTHFR): Heterozygous is usually BENIGN/LOW risk.
+
+    CALIBRATION PROTOCOL:
+    ${calibrationData ? "Active. Use the provided CALIBRATION DATA to filter out technical artifacts." : "Inactive."}
+
+    DATA: Use the 'REAL DATABASE CONTEXT' as the primary source of truth for variant classification (ClinVar) and Frequency (gnomAD).
+    
     OUTPUT: Valid JSON matching the schema strictly.
   `;
 
   const prompt = `
-  INPUT GENOMIC DATA: ${genomicInput.substring(0, 500)}...
-  REAL DB CONTEXT: ${realContext}
+  INPUT GENOMIC DATA: 
+  ${genomicInput.substring(0, 1500)}... 
+
+  REAL DB CONTEXT (Contains gnomAD Frequency): ${realContext}
   FOCUS: ${focusList.join(', ')}
   ANCESTRY: ${ancestry}
   
   INSTRUCTIONS:
-  - If ClinVar says 'Pathogenic', mark riskLevel 'HIGH'.
-  - Verify drug interactions for Pharmacogenomics using Google Search if needed.
+  - Extract ZYGOSITY (0/1 or 1/1).
+  - Determine PENETRANCE ('COMPLETE', 'HIGH', 'MODERATE', 'LOW') using the Frequency Rule (>1% = LOW) and Knowledge Base.
   - Return JSON.
   `;
 
@@ -246,6 +248,11 @@ export const analyzeGenomicData = async (
                             populationFrequency: { type: Type.STRING },
                             caddScore: { type: Type.NUMBER },
                             revelScore: { type: Type.NUMBER },
+                            zygosity: { type: Type.STRING },
+                            inheritanceMode: { type: Type.STRING },
+                            clinicalStatus: { type: Type.STRING },
+                            penetrance: { type: Type.STRING },
+                            penetranceDescription: { type: Type.STRING },
                             xai: { type: Type.OBJECT, properties: { pathogenicityScore: {type:Type.NUMBER}, structuralMechanism: {type:Type.STRING}, molecularFunction: {type:Type.STRING}, uniprotId: {type:Type.STRING}, variantPosition: {type:Type.NUMBER} } }
                           }
                         }

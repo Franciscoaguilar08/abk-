@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { analyzeGenomicData } from './services/geminiService';
+import { performOfflineAnalysis } from './services/offlineService';
 import { generateClinicalReport } from './services/pdfService';
 import { AnalysisResult, AnalysisFocus, AncestryGroup, VariantRiskLevel, MetabolizerStatus } from './types';
 import { VariantCard } from './components/VariantCard';
@@ -18,109 +19,9 @@ import { BioBackground } from './components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
-  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, AlertCircle, WifiOff, AlertTriangle, Lock
+  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, AlertCircle, WifiOff, AlertTriangle, Lock, Settings2, Scale, FileCog, Copy, RotateCcw
 } from 'lucide-react';
 import { PillIcon, AlertIcon } from './components/Icons';
-
-// --- ROBUST MOCK DATA FOR OFFLINE MODE ---
-const MOCK_CLINICAL_RESULT: AnalysisResult = {
-    patientSummary: "[SIMULATION MODE - NOT A DIAGNOSIS] The subject presents with a high-risk oncogenic profile driven by a TP53 mutation (Li-Fraumeni context) and a BRCA2 variant. Pharmacogenomic analysis indicates 'Poor Metabolizer' status for CYP2D6, necessitating dose adjustments for multiple analgesics and antidepressants.",
-    overallRiskScore: 88,
-    variants: [
-        {
-            gene: "TP53",
-            variant: "R175H",
-            rsId: "rs28929474",
-            description: "Pathogenic mutation in the DNA-binding domain of Tumor Protein p53. severely compromises tumor suppression capability.",
-            clinVarSignificance: "Pathogenic",
-            riskLevel: VariantRiskLevel.HIGH,
-            condition: "Li-Fraumeni Syndrome",
-            category: 'ONCOLOGY',
-            caddScore: 35.4,
-            revelScore: 0.95,
-            xai: {
-                pathogenicityScore: 0.98,
-                structuralMechanism: "Arg175His ➔ Loss of Zn Binding ➔ Unfolding of DNA Binding Domain ➔ Tumor Suppression Failure",
-                molecularFunction: "DNA Binding",
-                uniprotId: "P04637", // TP53 UniProt
-                variantPosition: 175,
-                attentionMap: [],
-                predictionConfidence: 0.99,
-                conservationScore: 9.5
-            }
-        },
-        {
-            gene: "BRCA2",
-            variant: "c.5946delT",
-            rsId: "rs80359550",
-            description: "Ashkenazi Jewish founder mutation causing premature protein truncation.",
-            clinVarSignificance: "Pathogenic",
-            riskLevel: VariantRiskLevel.HIGH,
-            condition: "Hereditary Breast Ovarian Cancer",
-            category: 'ONCOLOGY',
-            caddScore: 28.0,
-            xai: {
-                 pathogenicityScore: 0.92,
-                 structuralMechanism: "Frameshift ➔ Premature Stop ➔ Truncated Protein ➔ Loss of Homologous Recombination",
-                 molecularFunction: "DNA Repair",
-                 uniprotId: "P51587", // BRCA2 UniProt
-                 variantPosition: 1520,
-                 attentionMap: [],
-                 predictionConfidence: 0.95,
-                 conservationScore: 8.0
-            }
-        }
-    ],
-    pharmaProfiles: [
-        {
-            gene: "CYP2D6",
-            phenotype: MetabolizerStatus.POOR,
-            description: "Reduced enzyme activity. High risk of toxicity with standard doses of Codeine, Tramadol, and certain beta-blockers.",
-            interactions: [
-                { drugName: "Codeine", implication: "Lack of efficacy (prodrug conversion failure).", severity: "WARNING" },
-                { drugName: "Metoprolol", implication: "Increased plasma concentration. Risk of bradycardia.", severity: "WARNING" }
-            ]
-        }
-    ],
-    oncologyProfiles: [
-        {
-            gene: "TP53",
-            variant: "R175H",
-            evidenceTier: "TIER_1_STRONG",
-            mechanismOfAction: "Dominant-negative inhibition of wild-type p53 tetramerization.",
-            cancerHallmark: "Resisting Cell Death",
-            therapeuticImplications: ["Advexin (p53 gene therapy trials)", "APR-246 (reactivator)"],
-            riskScore: 95,
-            citation: "NCCN Guidelines v2.2024",
-            functionalCategory: "CELL_CYCLE"
-        }
-    ],
-    phenotypeTraits: [
-        {
-            trait: "Caffeine Metabolism",
-            category: "NUTRITION",
-            prediction: "Slow Metabolizer",
-            confidence: "HIGH",
-            description: "Carriers of CYP1A2*1F alleles may experience jitters and sleep disruption from caffeine.",
-            gene: "CYP1A2"
-        }
-    ],
-    nDimensionalAnalysis: {
-        clinicalSummary: "Critical genetic findings require immediate oncological consultation. Surveillance protocol for Li-Fraumeni syndrome is indicated.",
-        overallRiskLevel: "CRITICAL",
-        actionPlan: [
-            { title: "Whole Body MRI", priority: "IMMEDIATE", description: "Annual screening protocol for LFS patients.", specialistReferral: "Oncologist" },
-            { title: "Pharmacogenetic Consult", priority: "HIGH", description: "Review current medication list against CYP2D6 status.", specialistReferral: "Clinical Pharmacologist" }
-        ],
-        lifestyleModifications: [
-            { category: "ENVIRONMENT", recommendation: "Strict avoidance of radiation (X-Rays/CT) where possible due to TP53 compromise.", impactLevel: "HIGH" }
-        ],
-        surveillancePlan: [
-            { procedure: "Whole Body MRI", frequency: "Annually", startAge: "Immediate" },
-            { procedure: "Dermatologic Exam", frequency: "Every 6 months", startAge: "18" }
-        ]
-    }
-};
 
 const EXAMPLES = [
   {
@@ -267,6 +168,11 @@ const App: React.FC = () => {
   const [inputData, setInputData] = useState<string>("");
   const [selectedTargets, setSelectedTargets] = useState<AnalysisFocus[]>(['PHARMA']);
   const [selectedAncestry, setSelectedAncestry] = useState<AncestryGroup>(AncestryGroup.GLOBAL);
+  // NEW: Manual Zygosity State
+  const [manualZygosity, setManualZygosity] = useState<'0/1' | '1/1' | 'unknown'>('unknown');
+  
+  // Calibration State
+  const [calibrationData, setCalibrationData] = useState<string | null>(null);
   
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -285,9 +191,8 @@ const App: React.FC = () => {
   // --- Logic Handlers ---
 
   const enterHub = () => {
-      // Trigger Consent Modal if not yet consented
       if (!hasConsented) {
-          // The modal is rendered conditionally based on view, but logic happens here essentially
+          // Modal triggers via conditional render
       }
       setCurrentView('HUB');
   };
@@ -306,6 +211,15 @@ const App: React.FC = () => {
     }
   };
 
+  const handleReset = () => {
+      setResult(null);
+      setInputData("");
+      setError(null);
+      setCalibrationData(null);
+      setManualZygosity('unknown');
+      // We do NOT reset hasConsented or activeModule, keeping the user in the workspace
+  };
+
   const handleAnalyze = async () => {
     if (!inputData.trim()) return;
     
@@ -313,12 +227,21 @@ const App: React.FC = () => {
     setError(null);
     setIsOffline(false);
     setLoadingStatus("Initializing Analysis Protocol...");
+
+    // PREPARE PAYLOAD
+    // If Manual Input + Specific Zygosity selected, we append a header to instruct the AI
+    let finalPayload = inputData;
+    if (inputType === 'paste' && manualZygosity !== 'unknown') {
+        const zygosityHeader = `## OVERRIDE_ZYGOSITY_CONTEXT: ${manualZygosity} ##\n\n`;
+        finalPayload = zygosityHeader + inputData;
+    }
     
     try {
       const analysis = await analyzeGenomicData(
-          inputData, 
+          finalPayload, 
           selectedTargets, 
           selectedAncestry,
+          calibrationData, 
           (status) => setLoadingStatus(status) 
       );
       
@@ -327,16 +250,24 @@ const App: React.FC = () => {
       setLoading(false);
 
     } catch (err: any) {
-      // SECURE FALLBACK: If API Key is missing (SIMULATION_MODE_TRIGGER) or network fails
-      if (err.message === 'SIMULATION_MODE_TRIGGER' || err.message === 'CONNECTION_FAILED') {
-          console.warn("Activating Secure Offline Simulation Mode");
+      // ROBUST OFFLINE FALLBACK
+      // If the API call fails (SIMULATION_MODE_TRIGGER or CONNECTION_FAILED), 
+      // we don't just return a static object. We pass the ACTUAL input data 
+      // to the offline engine to find real matches in the local DB.
+      
+      if (err.message === 'SIMULATION_MODE_TRIGGER' || err.message === 'CONNECTION_FAILED' || err.message.includes('fetch')) {
+          console.warn("API Unreachable. Engaging Local Database Engine.");
           
+          setLoadingStatus("Engaging Offline Knowledge Base...");
+          
+          // Mimic processing delay for realism
           setTimeout(() => {
-              setResult(MOCK_CLINICAL_RESULT);
+              const offlineResult = performOfflineAnalysis(inputData);
+              setResult(offlineResult);
               setIsOffline(true);
               setActiveTab('overview');
               setLoading(false);
-          }, 1200); // Slight delay for realism
+          }, 1500);
       } else {
           console.error(err);
           setError("Analysis pipeline failed. Please retry.");
@@ -361,6 +292,18 @@ const App: React.FC = () => {
       };
       reader.readAsText(file);
     }
+  };
+
+  const handleCalibrationUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              const text = event.target?.result as string;
+              setCalibrationData(text.slice(0, 15000)); // Limit size for context
+          };
+          reader.readAsText(file);
+      }
   };
 
   const selectExample = (id: string) => {
@@ -490,9 +433,9 @@ const App: React.FC = () => {
                     <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 flex items-center gap-3">
                          <WifiOff className="w-6 h-6 text-amber-500 shrink-0" />
                          <div>
-                             <h3 className="text-amber-400 font-bold text-sm">Offline Mode Active</h3>
+                             <h3 className="text-amber-400 font-bold text-sm">Offline Knowledge Base Active</h3>
                              <p className="text-amber-200/70 text-xs">
-                                 Secure environment detected (Missing or Invalid API Key). Running in <strong>High-Fidelity Simulation Mode</strong>. Data is local-only.
+                                 Secure environment detected (Missing API Key or Network). Running on <strong>Local Database Engine v2.0</strong>. Results are based on internal libraries, not live AI.
                              </p>
                          </div>
                     </div>
@@ -504,7 +447,7 @@ const App: React.FC = () => {
                  <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-xl px-4 py-2 flex items-center justify-between">
                      <div className="flex items-center gap-2">
                          <Lock className="w-3 h-3 text-indigo-400" />
-                         <span className="text-[10px] text-indigo-300 font-mono">
+                         <span className="text-xs font-bold font-mono text-indigo-300">
                              RESEARCH SIMULATION ENVIRONMENT • NOT A MEDICAL DEVICE
                          </span>
                      </div>
@@ -584,7 +527,7 @@ const App: React.FC = () => {
                                         </button>
                                     </div>
 
-                                    <div className="flex-grow bg-slate-950/50 rounded-xl border border-slate-800 relative overflow-hidden min-h-[300px]">
+                                    <div className="flex-grow bg-slate-950/50 rounded-xl border border-slate-800 relative overflow-hidden min-h-[300px] flex flex-col">
                                         {inputType === 'upload' && (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 group transition-all">
                                                 <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-emerald-500/50">
@@ -599,13 +542,36 @@ const App: React.FC = () => {
                                             </div>
                                         )}
                                         {inputType === 'paste' && (
-                                            <textarea 
-                                                value={inputData}
-                                                onChange={(e) => setInputData(e.target.value)}
-                                                placeholder="> Paste sequence data or rsIDs here..."
-                                                className="w-full h-full p-6 bg-transparent resize-none font-mono text-xs text-slate-300 focus:outline-none placeholder:text-slate-700 leading-relaxed"
-                                                autoFocus
-                                            />
+                                            <>
+                                                {/* ZYGOSITY SELECTOR HEADER */}
+                                                <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
+                                                    <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                                        <Copy className="w-3 h-3" />
+                                                        <span className="font-bold uppercase">Manual Entry Mode</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Zygosity Context:</label>
+                                                        <select 
+                                                            value={manualZygosity}
+                                                            onChange={(e) => setManualZygosity(e.target.value as any)}
+                                                            className="bg-slate-950 border border-slate-700 text-white text-[10px] rounded px-2 py-1 outline-none focus:border-emerald-500 uppercase font-mono"
+                                                        >
+                                                            <option value="unknown">Auto-Detect / Unknown</option>
+                                                            <option value="0/1">0/1 Heterozygous (Carrier)</option>
+                                                            <option value="1/1">1/1 Homozygous (Affected)</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <textarea 
+                                                    value={inputData}
+                                                    onChange={(e) => setInputData(e.target.value)}
+                                                    placeholder={manualZygosity !== 'unknown' 
+                                                        ? `> Entering list of variants assumed to be ${manualZygosity === '0/1' ? 'HETEROZYGOUS' : 'HOMOZYGOUS'}...\nrs123456\nrs789012`
+                                                        : "> Paste sequence data or rsIDs here..."}
+                                                    className="w-full flex-grow p-6 bg-transparent resize-none font-mono text-xs text-slate-300 focus:outline-none placeholder:text-slate-700 leading-relaxed"
+                                                    autoFocus
+                                                />
+                                            </>
                                         )}
                                         {inputType === 'library' && (
                                             <div className="p-4 grid grid-cols-1 gap-3 overflow-y-auto h-full">
@@ -681,6 +647,39 @@ const App: React.FC = () => {
                                               ))}
                                            </select>
                                         </div>
+
+                                        {/* CALIBRATION PROTOCOL UPLOAD */}
+                                        <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-700/50">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Scale className={`w-4 h-4 ${calibrationData ? 'text-emerald-400' : 'text-slate-500'}`} />
+                                                    <span className="text-xs font-bold text-slate-300">System Calibration</span>
+                                                </div>
+                                                {calibrationData && (
+                                                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-500/20">
+                                                        ACTIVE
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            {!calibrationData ? (
+                                                <label className="flex items-center justify-center gap-2 w-full py-2 bg-slate-950 border border-dashed border-slate-600 rounded-lg text-[10px] text-slate-500 hover:text-white hover:border-slate-400 transition-all cursor-pointer">
+                                                    <Settings2 className="w-3 h-3" />
+                                                    Initialize Error Correction (Upload Baseline)
+                                                    <input type="file" onChange={handleCalibrationUpload} className="hidden" accept=".vcf,.txt,.csv" />
+                                                </label>
+                                            ) : (
+                                                <div className="flex items-center justify-between bg-emerald-900/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <FileCog className="w-3 h-3 text-emerald-400" />
+                                                        <span className="text-[10px] text-emerald-200">Baseline Loaded</span>
+                                                    </div>
+                                                    <button onClick={() => setCalibrationData(null)} className="text-[10px] text-slate-500 hover:text-white">
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="mt-6">
@@ -745,6 +744,13 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
+                            <button
+                                onClick={handleReset}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-300 border border-indigo-500/50 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-indigo-500 hover:text-white hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all duration-300 group"
+                            >
+                                <RotateCcw className="w-4 h-4 group-hover:-rotate-180 transition-transform duration-500" />
+                                New Analysis
+                            </button>
                             <button 
                                 onClick={handleDownloadPDF}
                                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-emerald-50 hover:shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all"
@@ -929,7 +935,7 @@ const App: React.FC = () => {
 
         {/* MODULE B: DISCOVERY LAB */}
         <div className={activeModule === 'DISCOVERY' ? 'block' : 'hidden'}>
-             <DiscoveryLab />
+             <DiscoveryLab userVariants={result?.variants || []} />
         </div>
 
       </main>
