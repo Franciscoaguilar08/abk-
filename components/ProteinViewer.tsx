@@ -5,8 +5,8 @@ import { Loader2, Cuboid, Crosshair, AlertTriangle, ShieldCheck, Info } from 'lu
 declare const $3Dmol: any;
 
 interface ProteinViewerProps {
-    pdbId?: string; // Legacy support
-    uniprotId?: string; // AlphaFold ID
+    pdbId?: string; // Legacy/Fallback (RCSB)
+    uniprotId?: string; // Primary (AlphaFold)
     highlightPosition?: number;
 }
 
@@ -24,19 +24,9 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
     useEffect(() => {
         if (!viewerRef.current) return;
         
-        // Sanitize Input ID: Remove version suffixes like .1 or .2 (e.g. P04637.1 -> P04637)
-        let rawId = (uniprotId || pdbId || "").trim().toUpperCase();
-        let targetId = rawId.split('.')[0]; 
-        
+        // Determine initial strategy
+        let targetId = (uniprotId || pdbId || "").trim().toUpperCase().split('.')[0];
         if (!targetId) return;
-
-        // Heuristic: If ID is 4 chars, it's likely PDB, not UniProt
-        if (targetId.length === 4 && /^[0-9][A-Z0-9]{3}$/.test(targetId)) {
-            setResolvedSource('RCSB_PDB');
-        } else {
-            setResolvedSource('ALPHAFOLD');
-        }
-        setResolvedId(targetId);
 
         if (typeof $3Dmol === 'undefined') {
             console.warn("3Dmol library not loaded");
@@ -48,64 +38,80 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
         setLoading(true);
         setError(false);
 
-        const fetchStructureData = async (id: string, source: 'ALPHAFOLD' | 'RCSB_PDB') => {
-            if (source === 'ALPHAFOLD') {
-                // AlphaFold Fetch Strategy: v4 -> v3 -> v2 -> v1
-                const versions = [4, 3, 2, 1];
-                for (const v of versions) {
-                    try {
-                        const url = `https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v${v}.pdb`;
-                        const res = await fetch(url);
-                        if (res.ok) return await res.text();
-                    } catch (e) {
-                        // continue to next version
-                    }
+        const fetchAlphaFold = async (uid: string) => {
+            // AlphaFold Fetch Strategy: v4 -> v3 -> v2 -> v1
+            const versions = [4, 3, 2, 1];
+            for (const v of versions) {
+                try {
+                    // Try Fragment 1 (F1) by default. 
+                    // Note: Large proteins like BRCA2 are split (F1, F2...). This is a simplified viewer.
+                    const url = `https://alphafold.ebi.ac.uk/files/AF-${uid}-F1-model_v${v}.pdb`;
+                    const res = await fetch(url);
+                    if (res.ok) return await res.text();
+                } catch (e) {
+                    continue;
                 }
-                throw new Error(`Structure AF-${id} not found in AlphaFold DB`);
-            } else {
-                // RCSB PDB
-                const res = await fetch(`https://files.rcsb.org/download/${id}.pdb`);
-                if (!res.ok) throw new Error(`Structure ${id} not found in RCSB`);
-                return await res.text();
             }
+            throw new Error(`AF-${uid} not found`);
+        };
+
+        const fetchPDB = async (pid: string) => {
+            const res = await fetch(`https://files.rcsb.org/download/${pid}.pdb`);
+            if (!res.ok) throw new Error(`PDB ${pid} not found`);
+            return await res.text();
         };
 
         const initViewer = async () => {
             try {
                 const config = { backgroundColor: '#020617' };
                 const viewer = $3Dmol.createViewer(viewerRef.current, config);
-                
-                // Determine Source Strategy based on heuristics + explicit props
-                let source = resolvedSource;
-                if(uniprotId) source = 'ALPHAFOLD';
-                if(pdbId) source = 'RCSB_PDB';
+                viewer.clear();
 
-                // Attempt Fetch
                 let pdbData = "";
-                try {
-                    pdbData = await fetchStructureData(targetId, source);
-                    setResolvedSource(source); // Update if successful
-                } catch (afError) {
-                    // Silent retry logic
-                    const fallbackSource = source === 'ALPHAFOLD' ? 'RCSB_PDB' : 'ALPHAFOLD';
+                let finalSource: 'ALPHAFOLD' | 'RCSB_PDB' = 'ALPHAFOLD';
+                let finalId = targetId;
+
+                // --- SMART FETCH STRATEGY ---
+                // 1. Try AlphaFold if UniProt ID exists
+                if (uniprotId) {
                     try {
-                        pdbData = await fetchStructureData(targetId, fallbackSource);
-                        setResolvedSource(fallbackSource);
-                    } catch (fallbackError) {
-                        // Only throw if both fail
-                        throw afError; 
+                        pdbData = await fetchAlphaFold(uniprotId);
+                        finalSource = 'ALPHAFOLD';
+                        finalId = uniprotId;
+                    } catch (afError) {
+                        console.warn(`AlphaFold fetch failed for ${uniprotId}, attempting PDB fallback...`);
+                        // 2. Fallback to RCSB if AlphaFold fails AND we have a pdbId
+                        if (pdbId) {
+                            try {
+                                pdbData = await fetchPDB(pdbId);
+                                finalSource = 'RCSB_PDB';
+                                finalId = pdbId;
+                            } catch (pdbError) {
+                                throw new Error("Both AlphaFold and PDB sources failed.");
+                            }
+                        } else {
+                            throw afError;
+                        }
                     }
+                } 
+                // 3. Direct PDB fetch if no UniProt ID
+                else if (pdbId) {
+                    pdbData = await fetchPDB(pdbId);
+                    finalSource = 'RCSB_PDB';
+                    finalId = pdbId;
                 }
 
+                setResolvedSource(finalSource);
+                setResolvedId(finalId);
                 setLoading(false);
+
                 if (!viewer) return;
 
-                viewer.clear();
                 viewer.addModel(pdbData, "pdb");
                 viewer.setStyle({}, {});
 
                 // Style Logic
-                if (resolvedSource === 'ALPHAFOLD') {
+                if (finalSource === 'ALPHAFOLD') {
                     viewer.setStyle({}, {
                         cartoon: { 
                             colorscheme: {
@@ -118,7 +124,7 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                     });
                 } else {
                     viewer.setStyle({}, {
-                        cartoon: { color: '#64748b' }
+                        cartoon: { color: '#64748b' } // Slate-500 for PDB
                     });
                 }
 
@@ -149,12 +155,7 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                 viewer.spin('y', 0.15);
 
             } catch (e: any) {
-                // Graceful error handling - avoid loud console errors for expected 404s
-                if (e.message && e.message.includes('not found')) {
-                    console.warn(`3D Viewer: ${e.message}`);
-                } else {
-                    console.error("3D Render Error:", e);
-                }
+                console.warn(`3D Viewer Error: ${e.message}`);
                 setError(true);
                 setLoading(false);
             }
@@ -175,9 +176,7 @@ export const ProteinViewer: React.FC<ProteinViewerProps> = ({ pdbId, uniprotId, 
                 <div className="text-center">
                     <div className="text-xs font-mono uppercase text-amber-500">Structure Unavailable</div>
                     <div className="text-[10px] text-slate-600 mt-1 max-w-[200px]">
-                        Could not resolve 3D model for ID: <span className="text-slate-400 font-bold">{resolvedId}</span>.
-                        <br/>
-                        <span className="opacity-50">Entry might not exist in AlphaFold/PDB.</span>
+                        Could not resolve 3D model for ID: <span className="text-slate-400 font-bold">{uniprotId || pdbId}</span>.
                     </div>
                 </div>
             </div>

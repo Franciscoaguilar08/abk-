@@ -20,7 +20,8 @@ const LOCAL_VARIANT_DB: Record<string, any> = {
             pathogenicityScore: 0.99,
             structuralMechanism: "Frameshift leading to premature stop codon -> Nonsense Mediated Decay or truncated protein loss of function.",
             molecularFunction: "Homologous Recombination Repair",
-            uniprotId: "P51587",
+            uniprotId: "P51587", // AlphaFold often fails for this massive protein
+            pdbId: "1N0W", // Fallback: BRCA2 DNA Binding Domain Structure
             variantPosition: 1982
         }
     },
@@ -39,6 +40,7 @@ const LOCAL_VARIANT_DB: Record<string, any> = {
             structuralMechanism: "Arg175His disrupts Zinc binding site, causing global unfolding of the DNA binding domain.",
             molecularFunction: "Tumor Suppression / DNA Binding",
             uniprotId: "P04637",
+            pdbId: "1TSR", // Fallback PDB
             variantPosition: 175
         }
     },
@@ -56,6 +58,7 @@ const LOCAL_VARIANT_DB: Record<string, any> = {
             structuralMechanism: "Mimics phosphorylation of the activation segment, locking the kinase in a constitutively active conformation.",
             molecularFunction: "Kinase Signaling",
             uniprotId: "P15056",
+            pdbId: "4MBJ", // Fallback PDB
             variantPosition: 600
         }
     },

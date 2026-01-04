@@ -1,184 +1,153 @@
 
-export enum VariantRiskLevel {
-  LOW = 'LOW',
-  MODERATE = 'MODERATE',
-  HIGH = 'HIGH',
-  PATHOGENIC = 'PATHOGENIC',
-  BENIGN = 'BENIGN',
-  UNCERTAIN = 'UNCERTAIN'
-}
-
-export enum MetabolizerStatus {
-  POOR = 'POOR',
-  INTERMEDIATE = 'INTERMEDIATE',
-  NORMAL = 'NORMAL', // Extensive
-  RAPID = 'RAPID',
-  ULTRA_RAPID = 'ULTRA_RAPID',
-  UNKNOWN = 'UNKNOWN'
-}
-
 export type AnalysisFocus = 'COMPREHENSIVE' | 'PHARMA' | 'ONCOLOGY' | 'RARE_DISEASE';
 
 export enum AncestryGroup {
-  GLOBAL = 'GLOBAL', 
-  LATIN_AMERICAN = 'LATIN_AMERICAN',
-  AFRICAN = 'AFRICAN',
-  EAST_ASIAN = 'EAST_ASIAN',
-  SOUTH_ASIAN = 'SOUTH_ASIAN',
-  EUROPEAN = 'EUROPEAN',
-  ASHKENAZI_JEWISH = 'ASHKENAZI_JEWISH'
+    GLOBAL = 'GLOBAL',
+    LATIN_AMERICAN = 'LATIN_AMERICAN',
+    AFRICAN = 'AFRICAN',
+    EAST_ASIAN = 'EAST_ASIAN',
+    SOUTH_ASIAN = 'SOUTH_ASIAN',
+    EUROPEAN = 'EUROPEAN'
 }
 
-export interface DrugInteraction {
-  drugName: string;
-  implication: string; // e.g., "Requires lower dose", "Avoid use"
-  severity: 'INFO' | 'WARNING' | 'DANGER';
-  cpicGuidelineUrl?: string; // Link to specific guideline
+export enum VariantRiskLevel {
+    PATHOGENIC = 'PATHOGENIC',
+    HIGH = 'HIGH',
+    MODERATE = 'MODERATE',
+    UNCERTAIN = 'UNCERTAIN',
+    BENIGN = 'BENIGN',
+    LOW = 'LOW'
 }
 
-// XAI & Attention Map Structures
+export enum MetabolizerStatus {
+    POOR = 'POOR',
+    RAPID = 'RAPID',
+    ULTRA_RAPID = 'ULTRA_RAPID',
+    NORMAL = 'NORMAL'
+}
+
 export interface AttentionPoint {
-  position: number; // Relative or absolute position
-  residue: string; // Amino acid code (e.g., "A", "R")
-  weight: number; // 0.0 to 1.0 (Attention intensity)
-  impactDescription?: string; // e.g. "Hydrophobic Core Contact"
+    residueIndex: number;
+    significance: number;
+    description: string;
 }
 
 export interface XAIAnalysis {
-  pathogenicityScore: number; // 0.0 to 1.0 (Continuous scale)
-  predictionConfidence: number; // 0.0 to 1.0
-  structuralMechanism: string; // e.g., "Destabilizes alpha-helix structure"
-  molecularFunction: string; // e.g., "DNA binding domain"
-  conservationScore: number; // e.g., PhyloP score simulation (0-10)
-  pdbId?: string; // Legacy PDB Structure ID
-  uniprotId?: string; // NEW: AlphaFold UniProt ID (e.g. "P04637")
-  variantPosition?: number; // Integer position for 3D highlighting
-  attentionMap: AttentionPoint[]; // Simulated Transformer Attention Weights
+    pathogenicityScore: number;
+    structuralMechanism: string;
+    molecularFunction: string;
+    uniprotId?: string;
+    pdbId?: string;
+    variantPosition?: number;
+    attentionPoints?: AttentionPoint[];
 }
 
 export interface VariantAnalysis {
-  gene: string;
-  variant: string; // e.g., rs123456 or c.123A>G
-  rsId?: string; // Standard dbSNP ID
-  description: string;
-  clinVarSignificance: string; // REAL ClinVar data
-  riskLevel: VariantRiskLevel;
-  condition?: string; 
-  category: 'GENERAL' | 'PHARMA' | 'ONCOLOGY';
-  
-  // Real Data Fields
-  populationFrequency?: string; // gnomAD Real Data
-  caddScore?: number; // Real CADD Phred Score
-  revelScore?: number; // Real REVEL Score (0-1)
-  
-  // Zygosity & Inheritance Logic
-  zygosity?: 'HETEROZYGOUS' | 'HOMOZYGOUS' | 'HEMIZYGOUS' | 'UNKNOWN';
-  inheritanceMode?: 'AUTOSOMAL_RECESSIVE' | 'AUTOSOMAL_DOMINANT' | 'X_LINKED' | 'MULTIFACTORIAL' | 'UNKNOWN';
-  clinicalStatus?: 'AFFECTED' | 'CARRIER' | 'UNCERTAIN'; 
-
-  // NEW: Penetrance Logic
-  penetrance?: 'COMPLETE' | 'HIGH' | 'MODERATE' | 'LOW' | 'UNKNOWN';
-  penetranceDescription?: string; // e.g. "Only 20% of carriers develop symptoms (Reduced Penetrance)"
-
-  equityAdjustment?: string;
-  xai?: XAIAnalysis; // New Field for Explainable AI
+    gene: string;
+    variant: string;
+    rsId?: string;
+    description: string;
+    clinVarSignificance: string;
+    riskLevel: VariantRiskLevel;
+    condition?: string;
+    populationFrequency?: string;
+    equityAdjustment?: string;
+    caddScore?: number;
+    revelScore?: number;
+    zygosity?: string;
+    inheritanceMode?: string;
+    clinicalStatus?: string;
+    penetrance?: string;
+    penetranceDescription?: string;
+    xai?: XAIAnalysis;
 }
 
-// Updated Pharma Profile with Grounding Sources
-export interface VerifiedSource {
+export interface PharmaInteraction {
+    drugName: string;
+    implication: string;
+    severity: 'INFO' | 'WARNING' | 'DANGER';
+}
+
+export interface PharmaSource {
     title: string;
     url: string;
-    snippet?: string;
 }
 
 export interface PharmaProfile {
-  gene: string;
-  phenotype: MetabolizerStatus;
-  description: string;
-  interactions: DrugInteraction[];
-  sources?: VerifiedSource[]; // NEW: For Google Search Grounding
+    gene: string;
+    phenotype: MetabolizerStatus;
+    description: string;
+    interactions: PharmaInteraction[];
+    sources?: PharmaSource[];
 }
 
-// Updated Oncology Profile for Molecular Pathology
 export interface OncologyProfile {
-  gene: string;
-  variant: string;
-  // AMP/ASCO/CAP Evidence Tiers
-  evidenceTier: 'TIER_1_STRONG' | 'TIER_2_POTENTIAL' | 'TIER_3_UNCERTAIN' | 'TIER_4_BENIGN';
-  
-  // The "Why" - Molecular Mechanism
-  mechanismOfAction: string; // e.g. "Loss of Heterozygosity (LOH)", "Constitutive Activation"
-  cancerHallmark: string; // e.g. "Genomic Instability", "Sustaining Proliferative Signaling"
-  
-  // The "Action" - Therapeutics
-  therapeuticImplications: string[]; // e.g. ["PARP Inhibitors", "Platinum-based chemotherapy"]
-  
-  riskScore: number; // 0-100 Scientific probability score
-  citation: string; // e.g. "NCCN Guidelines v2.2024"
-  functionalCategory: 'DNA_REPAIR' | 'CELL_CYCLE' | 'METABOLISM' | 'IMMUNITY' | 'UNKNOWN';
+    gene: string;
+    variant: string;
+    evidenceTier: string;
+    mechanismOfAction: string;
+    cancerHallmark: string;
+    therapeuticImplications: string[];
+    riskScore: number;
+    citation: string;
+    functionalCategory: string;
+    predisposition?: string;
+    notes?: string;
 }
 
-export interface EquityAnalysis {
-  detectedAncestry: string;
-  biasCorrectionApplied: boolean;
-  adjustmentFactor: number; 
-  explanation: string;
-}
-
-// === NEW: PHENOTYPE TRAITS ===
 export interface PhenotypeTrait {
-  trait: string;
-  category: 'APPEARANCE' | 'NUTRITION' | 'FITNESS' | 'SENSORY' | 'OTHER';
-  prediction: string;
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-  description: string;
-  gene: string;
+    trait: string;
+    category: string;
+    prediction: string;
+    confidence: string;
+    description: string;
+    gene: string;
 }
-
-// === NEW: ACTIONABLE CLINICAL INTELLIGENCE ===
 
 export interface ActionItem {
     title: string;
-    priority: 'IMMEDIATE' | 'HIGH' | 'ROUTINE';
+    priority: string;
     description: string;
-    specialistReferral?: string; // e.g. "Cardiologist", "Genetic Counselor"
+    specialistReferral?: string;
 }
 
 export interface LifestyleMod {
-    category: 'DIET' | 'EXERCISE' | 'ENVIRONMENT' | 'SUPPLEMENTS';
+    category: string;
     recommendation: string;
-    impactLevel: 'HIGH' | 'MODERATE';
+    impactLevel: string;
 }
 
 export interface MonitoringProtocol {
-    procedure: string; // e.g. "MRI Breast Screen"
-    frequency: string; // e.g. "Every 6 months"
-    startAge: string; // e.g. "Age 30"
+    procedure: string;
+    frequency: string;
+    startAge: string;
 }
 
-// Completely Restructured Clinical Analysis
 export interface NDimensionalAnalysis {
-    clinicalSummary: string; // Concise overview
-    overallRiskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-    
-    // The "What To Do" Sections
-    actionPlan: ActionItem[]; 
+    clinicalSummary: string;
+    overallRiskLevel: string;
+    actionPlan: ActionItem[];
     lifestyleModifications: LifestyleMod[];
     surveillancePlan: MonitoringProtocol[];
 }
 
-export interface AnalysisResult {
-  patientSummary: string;
-  variants: VariantAnalysis[];
-  pharmaProfiles: PharmaProfile[];
-  oncologyProfiles: OncologyProfile[];
-  phenotypeTraits?: PhenotypeTrait[];
-  overallRiskScore: number; 
-  equityAnalysis?: EquityAnalysis; 
-  nDimensionalAnalysis?: NDimensionalAnalysis; 
+export interface EquityAnalysis {
+    detectedAncestry: string;
+    biasCorrectionApplied: boolean;
+    adjustmentFactor: number;
+    explanation: string;
 }
 
-// === MODULE B: R&D DISCOVERY TYPES ===
+export interface AnalysisResult {
+    patientSummary: string;
+    overallRiskScore: number;
+    nDimensionalAnalysis: NDimensionalAnalysis;
+    equityAnalysis: EquityAnalysis;
+    variants: VariantAnalysis[];
+    pharmaProfiles: PharmaProfile[];
+    oncologyProfiles: OncologyProfile[];
+    phenotypeTraits: PhenotypeTrait[];
+}
 
 export interface DockingSimulation {
     targetName: string;
@@ -213,6 +182,13 @@ export interface PopulationData {
     predictedEfficacy: number; 
 }
 
+// NEW: Holds real data from UniProt to display in UI
+export interface ProteinRealData {
+    geneName: string;
+    functionDescription: string;
+    structuralFeatures: string[];
+}
+
 export interface SandboxResult {
     targetId: string;
     hypothesis: string;
@@ -222,6 +198,9 @@ export interface SandboxResult {
     stratification: PopulationData[];
     convergenceInsight: string;
     
+    // New: The raw biological data
+    proteinMetaData?: ProteinRealData;
+
     // New Detailed Explanations for Step-by-Step UI
     detailedAnalysis: {
         dockingDynamics: string; // Explains DeltaG, Kd, Steric hindrance

@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
+import { getProteinStructuralContext } from "./proteinService";
 import { parseGenomicInput } from "./genomicParser";
 import { ACMG_73, CPIC_PRIORITY } from "./geneLists";
 
@@ -355,57 +356,90 @@ export const analyzeGenomicData = async (
 
 export const analyzeDiscoveryData = async (
     targetInput: string,
-    literatureContext?: string, 
+    literatureContext: string = "", 
     onStatusUpdate?: (status: string) => void
-): Promise<SandboxResult> => {
-    
-    if (onStatusUpdate) onStatusUpdate("Initializing R&D Sandbox...");
-    await yieldToMain();
-
-    const ai = getAIInstance();
-    const safeContext = literatureContext ? literatureContext.substring(0, 60000) : "";
-
-    const systemInstruction = `
-        ROLE: Expert Bio-Curator and Structural Biologist.
-        TASK: Generate valid JSON for Target Discovery.
-        FORMAT: JSON ONLY.
-        
-        REQUIRED STRUCTURE:
-        {
-            "targetId": "string",
-            "hypothesis": "string",
-            "docking": { 
-                "targetName": "string", 
-                "uniprotId": "string (Valid UniProt ID, e.g. P01116)", 
-                "ligandName": "string", 
-                "bindingEnergy": number, 
-                "activeSiteResidues": [number] 
-            },
-            "network": { 
-                "nodes": [{ "id": "string", "group": "GENE"|"PROTEIN"|"METABOLITE", "impactScore": number }], 
-                "links": [{ "source": "string", "target": "string", "interactionType": "ACTIVATION"|"INHIBITION" }] 
-            },
-            "literature": [{ "title": "string", "source": "string", "summary": "string", "relevanceScore": number }],
-            "stratification": [{ "population": "string", "alleleFrequency": number, "predictedEfficacy": number }],
-            "convergenceInsight": "string",
-            "detailedAnalysis": { "dockingDynamics": "string", "pathwayKinetics": "string", "evidenceSynthesis": "string", "populationStat": "string" }
-        }
-    `;
-
-    const prompt = `
-        TARGET: ${targetInput}
-        CONTEXT: ${safeContext || "None. Infer from biological knowledge."}
-        
-        Generate realistic discovery data. 
-        IMPORTANT: 'docking.uniprotId' MUST be a real, valid UniProt Accession (e.g. P01116 for KRAS) for AlphaFold visualization.
-    `;
+): Promise<SandboxResult | null> => {
     
     try {
+        const ai = getAIInstance();
+
+        // 1. EXTRACT VARIANT DATA (Basic parsing)
+        const variantMatch = targetInput.match(/(\d+)/);
+        const position = variantMatch ? parseInt(variantMatch[0]) : undefined;
+        // Assume first word is Gene (e.g., "BRAF" in "BRAF V600E")
+        const geneName = targetInput.split(' ')[0].trim();
+
+        // 2. CONNECT TO STRUCTURAL DB (UniProt)
+        if (onStatusUpdate) onStatusUpdate(`CONNECTING TO UNIPROT KB FOR ${geneName}...`);
+        const proteinData = await getProteinStructuralContext(geneName, position);
+        
+        if (onStatusUpdate) onStatusUpdate("RUNNING IN-SILICO DOCKING PREDICTION...");
+
+        // 3. CONSTRUCT SCIENTIFIC PROMPT
+        const prompt = `
+          ROLE: Computational Biologist & Expert Pharmacologist.
+          TASK: Generate a high-fidelity interaction simulation for the gene/variant: "${targetInput}".
+          
+          === BIOLOGICAL GROUND TRUTH (FROM UNIPROT DATABASE) ===
+          - UniProt ID: ${proteinData?.uniprotId || "Unknown (AI Inference)"}
+          - Protein Function: ${proteinData?.functionDescription || "Standard metabolic function"}
+          - STRUCTURAL ANALYSIS: ${proteinData?.interactionPotential || "No specific structural conflict detected."}
+          - Functional Domains: ${proteinData?.structuralFeatures.join('; ') || "Generic domain structure"}
+          ========================================================
+
+          USER LITERATURE CONTEXT (If any): ${literatureContext || "None provided."}
+
+          INSTRUCTIONS:
+          Based strictly on the Structural Analysis above, generate a JSON response.
+          If the mutation hits an "ACTIVE_SITE" or "BINDING_SITE", predict RESISTANCE or HYPERSENSITIVITY.
+
+          OUTPUT FORMAT (Strict JSON, no markdown):
+          {
+            "targetId": "${targetInput.toUpperCase()}",
+            "hypothesis": "Scientific hypothesis (2 sentences). Explain mechanism of action based on the UniProt domain hit.",
+            "docking": {
+              "targetName": "${geneName} Protein",
+              "uniprotId": "${proteinData?.uniprotId || ""}",
+              "ligandName": "Name of a real drug (FDA/Trial) for this target",
+              "bindingEnergy": -9.5, 
+              "activeSiteResidues": [${position || 100}, ${position ? position + 5 : 105}, ${position ? position - 5 : 95}]
+            },
+            "network": {
+               "nodes": [
+                  {"id": "${geneName}", "group": "GENE", "impactScore": 1.0},
+                  {"id": "Protein_B", "group": "PROTEIN", "impactScore": 0.8},
+                  {"id": "Protein_C", "group": "PROTEIN", "impactScore": 0.7},
+                  {"id": "Metabolite_X", "group": "METABOLITE", "impactScore": 0.6}
+               ],
+               "links": [
+                  {"source": "${geneName}", "target": "Protein_B", "interactionType": "ACTIVATION"},
+                  {"source": "Protein_B", "target": "Protein_C", "interactionType": "INHIBITION"},
+                  {"source": "Protein_C", "target": "Metabolite_X", "interactionType": "CATALYSIS"}
+               ]
+            },
+            "literature": [
+               {"title": "Study on ${geneName} Variants", "source": "Nature Genetics (AI Sim)", "summary": "Relevance of domain mutation.", "relevanceScore": 95},
+               {"title": "Clinical Resistance Patterns", "source": "PubMed (AI Sim)", "summary": "Drug interaction data.", "relevanceScore": 88}
+            ],
+            "stratification": [
+               {"population": "Global", "alleleFrequency": 2.5, "predictedEfficacy": 75},
+               {"population": "European", "alleleFrequency": 3.1, "predictedEfficacy": 80},
+               {"population": "East Asian", "alleleFrequency": 1.8, "predictedEfficacy": 60}
+            ],
+            "convergenceInsight": "Synthesize the Structural Analysis + Drug Mechanism into a theory of action.",
+            "detailedAnalysis": {
+               "dockingDynamics": "Explain H-bonds/Steric hindrance based on the amino acid change.",
+               "pathwayKinetics": "Impact on downstream signaling.",
+               "evidenceSynthesis": "Summary of consensus.",
+               "populationStat": "Brief stat analysis."
+            }
+          }
+        `;
+
         const response = await ai.models.generateContent({
           model: modelId,
           contents: prompt,
           config: {
-            systemInstruction: systemInstruction,
             responseMimeType: "application/json",
             temperature: 0.2, 
             maxOutputTokens: 8192, 
@@ -413,9 +447,21 @@ export const analyzeDiscoveryData = async (
         });
         
         if (!response.text) throw new Error("Simulation failed.");
-        return cleanAndParseJSON(response.text) as SandboxResult;
+        const parsed = cleanAndParseJSON(response.text) as SandboxResult;
+        
+        // Inject Real Data back if available
+        if (proteinData) {
+            parsed.proteinMetaData = {
+                geneName: proteinData.geneName,
+                functionDescription: proteinData.functionDescription,
+                structuralFeatures: proteinData.structuralFeatures
+            };
+        }
+        
+        return parsed;
+
     } catch (e: any) {
         console.error("Gemini R&D API Error:", e);
-        throw e;
+        return null; // Triggers Offline Mode in UI
     }
 };

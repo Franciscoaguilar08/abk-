@@ -1,15 +1,13 @@
 
 import React, { useState } from 'react';
 import { analyzeGenomicData } from './services/geminiService';
-import { performOfflineAnalysis } from './services/offlineService';
 import { generateClinicalReport } from './services/pdfService';
-import { AnalysisResult, AnalysisFocus, AncestryGroup, VariantRiskLevel, MetabolizerStatus } from './types';
+import { AnalysisResult, AnalysisFocus, AncestryGroup } from './types';
 import { VariantCard } from './components/VariantCard';
 import { PharmaCard } from './components/PharmaCard';
 import { PhenotypeCard } from './components/PhenotypeCard';
 import { AncestryCard } from './components/AncestryCard';
 import { NDimensionalCard } from './components/NDimensionalCard';
-import { OncologyDetailCard } from './components/OncologyDetailCard';
 import { LandingPage } from './components/LandingPage';
 import { CommandHub } from './components/CommandHub';
 import { DiscoveryLab } from './components/DiscoveryLab';
@@ -17,12 +15,13 @@ import { RiskDistributionChart, OncologyTargetChart } from './components/Charts'
 import { SciFiButton } from './components/SciFiButton';
 import { BioBackground } from './components/BioBackground';
 import { 
-  Microscope, Activity, Dna, FileText, Target, 
+  Microscope, Activity, Dna, FileText, Zap, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
-  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, AlertCircle, WifiOff, AlertTriangle, Lock, Settings2, Scale, FileCog, Copy, RotateCcw
+  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, LayoutGrid, AlertCircle, Layers, RotateCcw
 } from 'lucide-react';
 import { PillIcon, AlertIcon } from './components/Icons';
 
+// Example Data Sets for Clinical
 const EXAMPLES = [
   {
     id: 'brca',
@@ -55,8 +54,10 @@ const EXAMPLES = [
 ];
 
 const ANALYSIS_OPTIONS = [
+    { id: 'COMPREHENSIVE', icon: Activity, label: 'General Health', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
     { id: 'PHARMA', icon: PillIcon, label: 'Pharmacogenomics', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
     { id: 'ONCOLOGY', icon: Dna, label: 'Oncology', color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
+    { id: 'RARE_DISEASE', icon: Microscope, label: 'Rare Disease', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
 ];
 
 const ANCESTRY_OPTIONS = [
@@ -71,115 +72,21 @@ const ANCESTRY_OPTIONS = [
 type AppView = 'LANDING' | 'HUB' | 'WORKSPACE';
 type ModuleType = 'CLINICAL' | 'DISCOVERY';
 
-// --- LEGAL / ETHICAL CONSENT COMPONENT ---
-const LegalConsentModal: React.FC<{ onConsent: () => void }> = ({ onConsent }) => {
-    const [checks, setChecks] = useState({
-        notMedical: false,
-        thirdParty: false,
-        researchOnly: false
-    });
-
-    const allChecked = checks.notMedical && checks.thirdParty && checks.researchOnly;
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-            <div className="bg-[#0f172a] border border-red-500/30 rounded-2xl max-w-lg w-full p-8 shadow-[0_0_50px_rgba(239,68,68,0.2)] relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
-                
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
-                        <AlertTriangle className="w-8 h-8 text-red-500" />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-white uppercase tracking-tight">Critical Safety Warning</h2>
-                        <p className="text-red-400 text-xs font-mono">MANDATORY USER CONSENT PROTOCOL</p>
-                    </div>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                    <p className="text-slate-300 text-sm leading-relaxed">
-                        You are accessing a <strong>Research Simulation Environment</strong> driven by Generative AI. 
-                        This tool is <strong className="text-white">NOT a medical device</strong>. 
-                        It generates probabilistic outputs that may contain errors (hallucinations).
-                    </p>
-                    
-                    <div className="space-y-3 bg-black/40 p-4 rounded-xl border border-white/5">
-                        <label className="flex items-start gap-3 cursor-pointer group">
-                            <div className="relative flex items-center">
-                                <input type="checkbox" className="peer sr-only" checked={checks.notMedical} onChange={e => setChecks({...checks, notMedical: e.target.checked})} />
-                                <div className="w-5 h-5 border-2 border-slate-600 rounded peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all"></div>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-0.5 left-0.5 opacity-0 peer-checked:opacity-100" />
-                            </div>
-                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
-                                I understand this is <strong>NOT a medical diagnosis</strong> and should not replace professional medical advice.
-                            </span>
-                        </label>
-                        
-                        <label className="flex items-start gap-3 cursor-pointer group">
-                             <div className="relative flex items-center">
-                                <input type="checkbox" className="peer sr-only" checked={checks.thirdParty} onChange={e => setChecks({...checks, thirdParty: e.target.checked})} />
-                                <div className="w-5 h-5 border-2 border-slate-600 rounded peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all"></div>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-0.5 left-0.5 opacity-0 peer-checked:opacity-100" />
-                            </div>
-                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
-                                I acknowledge that anonymized data is processed by <strong>Google Gemini API</strong> (Third Party).
-                            </span>
-                        </label>
-
-                        <label className="flex items-start gap-3 cursor-pointer group">
-                             <div className="relative flex items-center">
-                                <input type="checkbox" className="peer sr-only" checked={checks.researchOnly} onChange={e => setChecks({...checks, researchOnly: e.target.checked})} />
-                                <div className="w-5 h-5 border-2 border-slate-600 rounded peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all"></div>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-0.5 left-0.5 opacity-0 peer-checked:opacity-100" />
-                            </div>
-                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
-                                I will verify all findings with a qualified genetic counselor or oncologist.
-                            </span>
-                        </label>
-                    </div>
-                </div>
-
-                <button 
-                    onClick={onConsent}
-                    disabled={!allChecked}
-                    className={`w-full py-4 rounded-xl font-bold uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${
-                        allChecked 
-                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50' 
-                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                    }`}
-                >
-                    {allChecked ? 'Enter Research Environment' : 'Acknowledge Risks to Proceed'}
-                    {allChecked && <ArrowRight className="w-4 h-4" />}
-                </button>
-            </div>
-        </div>
-    );
-}
-
 const App: React.FC = () => {
   // Navigation State
   const [currentView, setCurrentView] = useState<AppView>('LANDING');
   const [activeModule, setActiveModule] = useState<ModuleType>('CLINICAL');
-  
-  // Guardrails State
-  const [hasConsented, setHasConsented] = useState(false);
 
   // Clinical App State
   const [inputData, setInputData] = useState<string>("");
-  const [selectedTargets, setSelectedTargets] = useState<AnalysisFocus[]>(['PHARMA']);
+  const [selectedTargets, setSelectedTargets] = useState<AnalysisFocus[]>(['COMPREHENSIVE']);
   const [selectedAncestry, setSelectedAncestry] = useState<AncestryGroup>(AncestryGroup.GLOBAL);
-  // NEW: Manual Zygosity State
-  const [manualZygosity, setManualZygosity] = useState<'0/1' | '1/1' | 'unknown'>('unknown');
-  
-  // Calibration State
-  const [calibrationData, setCalibrationData] = useState<string | null>(null);
   
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingStatus, setLoadingStatus] = useState<string>("Initializing...");
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'variants' | 'pharma' | 'oncology' | 'phenotypes'>('overview');
-  const [isOffline, setIsOffline] = useState(false);
   
   // Pharma Simulation State
   const [drugSearch, setDrugSearch] = useState("");
@@ -190,16 +97,21 @@ const App: React.FC = () => {
 
   // --- Logic Handlers ---
 
-  const enterHub = () => {
-      if (!hasConsented) {
-          // Modal triggers via conditional render
-      }
-      setCurrentView('HUB');
-  };
+  const enterHub = () => setCurrentView('HUB');
   
   const selectModule = (mod: ModuleType) => {
       setActiveModule(mod);
       setCurrentView('WORKSPACE');
+  };
+
+  const handleReset = () => {
+      setResult(null);
+      setInputData("");
+      setError(null);
+      setLoading(false);
+      setDrugSimulationResult(null);
+      setDrugSearch("");
+      // Maintain other settings like Ancestry/Targets for convenience
   };
 
   const toggleTarget = (target: AnalysisFocus) => {
@@ -211,37 +123,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleReset = () => {
-      setResult(null);
-      setInputData("");
-      setError(null);
-      setCalibrationData(null);
-      setManualZygosity('unknown');
-      // We do NOT reset hasConsented or activeModule, keeping the user in the workspace
-  };
-
   const handleAnalyze = async () => {
     if (!inputData.trim()) return;
     
     setLoading(true);
     setError(null);
-    setIsOffline(false);
     setLoadingStatus("Initializing Analysis Protocol...");
-
-    // PREPARE PAYLOAD
-    // If Manual Input + Specific Zygosity selected, we append a header to instruct the AI
-    let finalPayload = inputData;
-    if (inputType === 'paste' && manualZygosity !== 'unknown') {
-        const zygosityHeader = `## OVERRIDE_ZYGOSITY_CONTEXT: ${manualZygosity} ##\n\n`;
-        finalPayload = zygosityHeader + inputData;
-    }
     
     try {
       const analysis = await analyzeGenomicData(
-          finalPayload, 
+          inputData, 
           selectedTargets, 
           selectedAncestry,
-          calibrationData, 
+          null, 
           (status) => setLoadingStatus(status) 
       );
       
@@ -250,29 +144,9 @@ const App: React.FC = () => {
       setLoading(false);
 
     } catch (err: any) {
-      // ROBUST OFFLINE FALLBACK
-      // If the API call fails (SIMULATION_MODE_TRIGGER or CONNECTION_FAILED), 
-      // we don't just return a static object. We pass the ACTUAL input data 
-      // to the offline engine to find real matches in the local DB.
-      
-      if (err.message === 'SIMULATION_MODE_TRIGGER' || err.message === 'CONNECTION_FAILED' || err.message.includes('fetch')) {
-          console.warn("API Unreachable. Engaging Local Database Engine.");
-          
-          setLoadingStatus("Engaging Offline Knowledge Base...");
-          
-          // Mimic processing delay for realism
-          setTimeout(() => {
-              const offlineResult = performOfflineAnalysis(inputData);
-              setResult(offlineResult);
-              setIsOffline(true);
-              setActiveTab('overview');
-              setLoading(false);
-          }, 1500);
-      } else {
-          console.error(err);
-          setError("Analysis pipeline failed. Please retry.");
-          setLoading(false);
-      }
+      console.error(err);
+      setError(err.message || "Analysis pipeline failed. Ensure valid API Key and network connection.");
+      setLoading(false);
     }
   };
 
@@ -292,18 +166,6 @@ const App: React.FC = () => {
       };
       reader.readAsText(file);
     }
-  };
-
-  const handleCalibrationUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-              const text = event.target?.result as string;
-              setCalibrationData(text.slice(0, 15000)); // Limit size for context
-          };
-          reader.readAsText(file);
-      }
   };
 
   const selectExample = (id: string) => {
@@ -367,7 +229,7 @@ const App: React.FC = () => {
                     DIGITAL TWIN
                  </span>
                  <span className={`text-[10px] uppercase tracking-widest font-bold ${activeModule === 'DISCOVERY' ? 'text-violet-500' : 'text-emerald-500'}`}>
-                    {activeModule === 'DISCOVERY' ? 'R&D Lab' : 'Genomic Research Core'}
+                    {activeModule === 'DISCOVERY' ? 'R&D Lab' : 'Genomic Core'}
                  </span>
              </div>
           </div>
@@ -393,18 +255,6 @@ const App: React.FC = () => {
       </header>
   );
 
-  // CHECK CONSENT - Blocking Modal
-  if (!hasConsented) {
-      return (
-          <>
-             <div className="blur-xl pointer-events-none fixed inset-0 z-0">
-                 <BioBackground variant="app" />
-             </div>
-             <LegalConsentModal onConsent={() => setHasConsented(true)} />
-          </>
-      );
-  }
-
   if (currentView === 'HUB') {
       return (
           <div className="min-h-screen font-inter bg-[#020617] text-slate-100 flex flex-col relative overflow-hidden">
@@ -427,34 +277,6 @@ const App: React.FC = () => {
         {/* MODULE A: CLINICAL */}
         <div className={activeModule === 'CLINICAL' ? 'block' : 'hidden'}>
             
-            {/* OFFLINE INDICATOR */}
-            {isOffline && (
-                <div className="mb-8 animate-fade-in-up">
-                    <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 flex items-center gap-3">
-                         <WifiOff className="w-6 h-6 text-amber-500 shrink-0" />
-                         <div>
-                             <h3 className="text-amber-400 font-bold text-sm">Offline Knowledge Base Active</h3>
-                             <p className="text-amber-200/70 text-xs">
-                                 Secure environment detected (Missing API Key or Network). Running on <strong>Local Database Engine v2.0</strong>. Results are based on internal libraries, not live AI.
-                             </p>
-                         </div>
-                    </div>
-                </div>
-            )}
-            
-            {/* RESEARCH DISCLAIMER BANNER */}
-            <div className="mb-6 animate-fade-in-up">
-                 <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-xl px-4 py-2 flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                         <Lock className="w-3 h-3 text-indigo-400" />
-                         <span className="text-xs font-bold font-mono text-indigo-300">
-                             RESEARCH SIMULATION ENVIRONMENT • NOT A MEDICAL DEVICE
-                         </span>
-                     </div>
-                     <span className="text-[10px] text-slate-500 hidden sm:block">AI-Generated Content</span>
-                 </div>
-            </div>
-
             {/* ERROR DISPLAY */}
             {error && !loading && (
                 <div className="mb-8 animate-fade-in-up">
@@ -527,7 +349,7 @@ const App: React.FC = () => {
                                         </button>
                                     </div>
 
-                                    <div className="flex-grow bg-slate-950/50 rounded-xl border border-slate-800 relative overflow-hidden min-h-[300px] flex flex-col">
+                                    <div className="flex-grow bg-slate-950/50 rounded-xl border border-slate-800 relative overflow-hidden min-h-[300px]">
                                         {inputType === 'upload' && (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 group transition-all">
                                                 <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-emerald-500/50">
@@ -542,36 +364,13 @@ const App: React.FC = () => {
                                             </div>
                                         )}
                                         {inputType === 'paste' && (
-                                            <>
-                                                {/* ZYGOSITY SELECTOR HEADER */}
-                                                <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
-                                                    <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                                        <Copy className="w-3 h-3" />
-                                                        <span className="font-bold uppercase">Manual Entry Mode</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Zygosity Context:</label>
-                                                        <select 
-                                                            value={manualZygosity}
-                                                            onChange={(e) => setManualZygosity(e.target.value as any)}
-                                                            className="bg-slate-950 border border-slate-700 text-white text-[10px] rounded px-2 py-1 outline-none focus:border-emerald-500 uppercase font-mono"
-                                                        >
-                                                            <option value="unknown">Auto-Detect / Unknown</option>
-                                                            <option value="0/1">0/1 Heterozygous (Carrier)</option>
-                                                            <option value="1/1">1/1 Homozygous (Affected)</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <textarea 
-                                                    value={inputData}
-                                                    onChange={(e) => setInputData(e.target.value)}
-                                                    placeholder={manualZygosity !== 'unknown' 
-                                                        ? `> Entering list of variants assumed to be ${manualZygosity === '0/1' ? 'HETEROZYGOUS' : 'HOMOZYGOUS'}...\nrs123456\nrs789012`
-                                                        : "> Paste sequence data or rsIDs here..."}
-                                                    className="w-full flex-grow p-6 bg-transparent resize-none font-mono text-xs text-slate-300 focus:outline-none placeholder:text-slate-700 leading-relaxed"
-                                                    autoFocus
-                                                />
-                                            </>
+                                            <textarea 
+                                                value={inputData}
+                                                onChange={(e) => setInputData(e.target.value)}
+                                                placeholder="> Paste sequence data or rsIDs here..."
+                                                className="w-full h-full p-6 bg-transparent resize-none font-mono text-xs text-slate-300 focus:outline-none placeholder:text-slate-700 leading-relaxed"
+                                                autoFocus
+                                            />
                                         )}
                                         {inputType === 'library' && (
                                             <div className="p-4 grid grid-cols-1 gap-3 overflow-y-auto h-full">
@@ -647,49 +446,42 @@ const App: React.FC = () => {
                                               ))}
                                            </select>
                                         </div>
-
-                                        {/* CALIBRATION PROTOCOL UPLOAD */}
-                                        <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-700/50">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Scale className={`w-4 h-4 ${calibrationData ? 'text-emerald-400' : 'text-slate-500'}`} />
-                                                    <span className="text-xs font-bold text-slate-300">System Calibration</span>
-                                                </div>
-                                                {calibrationData && (
-                                                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-500/20">
-                                                        ACTIVE
-                                                    </span>
-                                                )}
-                                            </div>
-                                            
-                                            {!calibrationData ? (
-                                                <label className="flex items-center justify-center gap-2 w-full py-2 bg-slate-950 border border-dashed border-slate-600 rounded-lg text-[10px] text-slate-500 hover:text-white hover:border-slate-400 transition-all cursor-pointer">
-                                                    <Settings2 className="w-3 h-3" />
-                                                    Initialize Error Correction (Upload Baseline)
-                                                    <input type="file" onChange={handleCalibrationUpload} className="hidden" accept=".vcf,.txt,.csv" />
-                                                </label>
-                                            ) : (
-                                                <div className="flex items-center justify-between bg-emerald-900/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <FileCog className="w-3 h-3 text-emerald-400" />
-                                                        <span className="text-[10px] text-emerald-200">Baseline Loaded</span>
-                                                    </div>
-                                                    <button onClick={() => setCalibrationData(null)} className="text-[10px] text-slate-500 hover:text-white">
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
                                     </div>
 
+                                    {/* MODIFIED BUTTON SECTION */}
                                     <div className="mt-6">
+                                        <div className="flex justify-between items-center mb-2 px-1">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                                <Layers className="w-3 h-3" />
+                                                Active Engines:
+                                            </div>
+                                            <div className="flex gap-1.5">
+                                                {selectedTargets.includes('ONCOLOGY') && (
+                                                    <span className="text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(251,113,133,0.3)]">ONCO</span>
+                                                )}
+                                                {selectedTargets.includes('PHARMA') && (
+                                                    <span className="text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(52,211,153,0.3)]">PHARMA</span>
+                                                )}
+                                                 {selectedTargets.includes('COMPREHENSIVE') && (
+                                                    <span className="text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded">FULL</span>
+                                                )}
+                                            </div>
+                                        </div>
                                         <SciFiButton 
                                             onClick={handleAnalyze} 
                                             disabled={!inputData}
-                                            className="w-full"
+                                            className="w-full h-auto py-4 group"
                                         >
-                                            INSTANTIATE TWIN
-                                            <ArrowRight className="w-5 h-5" />
+                                            <div className="flex flex-col items-center gap-1 w-full">
+                                                <div className="flex items-center gap-2 text-white group-hover:scale-105 transition-transform">
+                                                    RUN PRECISION PROTOCOLS
+                                                    <ArrowRight className="w-5 h-5" />
+                                                </div>
+                                                <div className="h-px w-3/4 bg-white/10 my-1"></div>
+                                                <span className="text-[9px] text-slate-400 font-normal tracking-[0.2em] group-hover:text-emerald-200 transition-colors">
+                                                    EXECUTING ONCOLOGY & PHARMACOGENOMICS
+                                                </span>
+                                            </div>
                                         </SciFiButton>
                                     </div>
                                 </div>
@@ -744,19 +536,21 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <button
+                             {/* ADDED NEW ANALYSIS BUTTON */}
+                             <button 
                                 onClick={handleReset}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-300 border border-indigo-500/50 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-indigo-500 hover:text-white hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all duration-300 group"
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-all shadow-lg"
                             >
-                                <RotateCcw className="w-4 h-4 group-hover:-rotate-180 transition-transform duration-500" />
+                                <RotateCcw className="w-3.5 h-3.5" />
                                 New Analysis
                             </button>
+                            
                             <button 
                                 onClick={handleDownloadPDF}
                                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-emerald-50 hover:shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all"
                             >
                                 <Download className="w-4 h-4" />
-                                Download Simulation Report (PDF)
+                                Download Clinical Summary (PDF)
                             </button>
                             <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 overflow-x-auto max-w-full">
                                  {['overview', 'variants', 'pharma', 'oncology', 'phenotypes'].map((tab) => (
@@ -899,13 +693,39 @@ const App: React.FC = () => {
                         )}
 
                         {activeTab === 'oncology' && (
-                            <div className="space-y-6">
-                                {(!result.oncologyProfiles || result.oncologyProfiles.length === 0) && (
-                                    <p className="text-slate-500 text-center py-20 italic">No oncology risks detected.</p>
-                                )}
-                                {result.oncologyProfiles?.map((profile, idx) => (
-                                    <OncologyDetailCard key={idx} profile={profile} />
-                                ))}
+                            <div className="glass-panel rounded-xl overflow-hidden border border-white/5">
+                                <table className="min-w-full divide-y divide-white/5">
+                                    <thead className="bg-slate-900/50">
+                                        <tr>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Gene</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Hallmark</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Risk Score</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Mechanism</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {(!result.oncologyProfiles || result.oncologyProfiles.length === 0) && (
+                                            <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-500 italic">No oncology risks detected.</td></tr>
+                                        )}
+                                        {result.oncologyProfiles?.map((profile, idx) => (
+                                            <tr key={idx} className="hover:bg-white/5 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{profile.gene}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{profile.cancerHallmark}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <span className={`text-sm font-bold mr-3 w-8 text-right ${profile.riskScore > 50 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                                            {profile.riskScore}
+                                                        </span>
+                                                        <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                                            <div className={`h-full rounded-full shadow-[0_0_10px_currentColor] ${profile.riskScore > 75 ? 'bg-red-500 text-red-500' : profile.riskScore > 40 ? 'bg-orange-400 text-orange-400' : 'bg-emerald-500 text-emerald-500'}`} style={{width: `${profile.riskScore}%`}}></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-slate-400">{profile.mechanismOfAction}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         )}
                         
@@ -933,7 +753,7 @@ const App: React.FC = () => {
             )}
         </div>
 
-        {/* MODULE B: DISCOVERY LAB */}
+        {/* MODULE B: DISCOVERY LAB - PASSING USER VARIANTS */}
         <div className={activeModule === 'DISCOVERY' ? 'block' : 'hidden'}>
              <DiscoveryLab userVariants={result?.variants || []} />
         </div>
@@ -946,12 +766,12 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2">
                <ShieldCheck className="w-4 h-4 text-emerald-500" />
                <p>
-                  <strong className="text-slate-400">Validated Sources:</strong> Findings are cross-referenced with <span className="text-slate-300">ClinVar</span>, <span className="text-slate-300">AlphaFold DB</span>, <span className="text-slate-300">dbSNP</span>.
+                  <strong className="text-slate-400">Validated Sources:</strong> Findings are cross-referenced with <span className="text-slate-300">ClinVar</span>, <span className="text-slate-300">PharmGKB</span>, <span className="text-slate-300">dbSNP</span>.
                </p>
             </div>
             <div className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
                <Info className="w-3 h-3" />
-               <p>For educational simulation only. NOT A MEDICAL DEVICE.</p>
+               <p>For research and educational simulation only. Consult a genetic counselor for medical diagnosis.</p>
             </div>
          </div>
       </footer>
