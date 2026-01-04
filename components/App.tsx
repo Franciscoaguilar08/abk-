@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { analyzeGenomicData } from './services/geminiService';
 import { generateClinicalReport } from './services/pdfService';
-import { AnalysisResult, AnalysisFocus, AncestryGroup } from './types';
+import { AnalysisResult, AnalysisFocus, AncestryGroup, GenomeBuild } from './types';
 import { VariantCard } from './components/VariantCard';
 import { PharmaCard } from './components/PharmaCard';
 import { PhenotypeCard } from './components/PhenotypeCard';
@@ -17,7 +17,7 @@ import { BioBackground } from './components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Zap, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
-  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, LayoutGrid, AlertCircle
+  Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, LayoutGrid, AlertCircle, Layers, RotateCcw, Lock, Unlock, Settings2
 } from 'lucide-react';
 import { PillIcon, AlertIcon } from './components/Icons';
 
@@ -79,8 +79,10 @@ const App: React.FC = () => {
 
   // Clinical App State
   const [inputData, setInputData] = useState<string>("");
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [selectedTargets, setSelectedTargets] = useState<AnalysisFocus[]>(['COMPREHENSIVE']);
   const [selectedAncestry, setSelectedAncestry] = useState<AncestryGroup>(AncestryGroup.GLOBAL);
+  const [selectedGenomeBuild, setSelectedGenomeBuild] = useState<GenomeBuild>('GRCh38'); // Default to modern
   
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -95,6 +97,32 @@ const App: React.FC = () => {
   // New State for Input Tabs
   const [inputType, setInputType] = useState<'upload' | 'paste' | 'library'>('upload');
 
+  // Security State
+  const [isSecureSession, setIsSecureSession] = useState(false);
+
+  useEffect(() => {
+      const checkSecurity = async () => {
+          if ((window as any).aistudio && (window as any).aistudio.hasSelectedApiKey) {
+              const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+              setIsSecureSession(hasKey);
+          } else {
+              // Fallback: Check if Env var is present (Dev mode)
+              setIsSecureSession(!!process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY');
+          }
+      };
+      checkSecurity();
+  }, []);
+
+  const handleSecureConnect = async () => {
+      if ((window as any).aistudio && (window as any).aistudio.openSelectKey) {
+          await (window as any).aistudio.openSelectKey();
+          setIsSecureSession(true); // Optimistic update
+      } else {
+          // If no aistudio, we can't do much in this environment other than warn
+          alert("Secure Context: API Key management is handled by the hosting environment.");
+      }
+  };
+
   // --- Logic Handlers ---
 
   const enterHub = () => setCurrentView('HUB');
@@ -102,6 +130,17 @@ const App: React.FC = () => {
   const selectModule = (mod: ModuleType) => {
       setActiveModule(mod);
       setCurrentView('WORKSPACE');
+  };
+
+  const handleReset = () => {
+      setResult(null);
+      setInputData("");
+      setUploadedFileName(null);
+      setError(null);
+      setLoading(false);
+      setDrugSimulationResult(null);
+      setDrugSearch("");
+      // Maintain other settings like Ancestry/Targets for convenience
   };
 
   const toggleTarget = (target: AnalysisFocus) => {
@@ -116,6 +155,12 @@ const App: React.FC = () => {
   const handleAnalyze = async () => {
     if (!inputData.trim()) return;
     
+    // Security Gate
+    if (!isSecureSession) {
+        handleSecureConnect();
+        return;
+    }
+
     setLoading(true);
     setError(null);
     setLoadingStatus("Initializing Analysis Protocol...");
@@ -125,6 +170,7 @@ const App: React.FC = () => {
           inputData, 
           selectedTargets, 
           selectedAncestry,
+          selectedGenomeBuild,
           (status) => setLoadingStatus(status) 
       );
       
@@ -147,11 +193,21 @@ const App: React.FC = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadedFileName(file.name);
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
         setInputData(text.slice(0, 15000));
-        setInputType('paste'); // Switch to view data
+        // Removed auto-switch to 'paste' to improve UX
+        
+        // AUTO DETECT GENOME BUILD
+        if (text.includes("# rsid") || text.includes("23andMe")) {
+             // 23andMe files typically default to GRCh37
+             setSelectedGenomeBuild('GRCh37');
+        } else if (text.includes("##reference=file:///")) {
+             if (text.includes("GRCh37") || text.includes("hg19")) setSelectedGenomeBuild('GRCh37');
+             if (text.includes("GRCh38") || text.includes("hg38")) setSelectedGenomeBuild('GRCh38');
+        }
       };
       reader.readAsText(file);
     }
@@ -223,22 +279,37 @@ const App: React.FC = () => {
              </div>
           </div>
           
-          {/* Module Switcher (Sidebar Mini) */}
-          <div className="flex items-center gap-2 bg-slate-900/50 p-1 rounded-full border border-white/5">
+          <div className="flex items-center gap-4">
+              {/* Security Indicator */}
               <button 
-                onClick={() => setActiveModule('CLINICAL')}
-                className={`p-2 rounded-full transition-all ${activeModule === 'CLINICAL' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/50' : 'text-slate-500 hover:text-white'}`}
-                title="Clinical Hub"
+                onClick={handleSecureConnect}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all ${
+                    isSecureSession 
+                    ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400 cursor-default' 
+                    : 'bg-red-900/20 border-red-500/30 text-red-400 hover:bg-red-900/40 cursor-pointer animate-pulse'
+                }`}
               >
-                  <Activity className="w-4 h-4" />
+                  {isSecureSession ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                  {isSecureSession ? "Secure Enclave: Active" : "Connect Securely"}
               </button>
-              <button 
-                onClick={() => setActiveModule('DISCOVERY')}
-                className={`p-2 rounded-full transition-all ${activeModule === 'DISCOVERY' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/50' : 'text-slate-500 hover:text-white'}`}
-                title="Discovery Lab"
-              >
-                  <FlaskConical className="w-4 h-4" />
-              </button>
+
+              {/* Module Switcher (Sidebar Mini) */}
+              <div className="flex items-center gap-2 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                  <button 
+                    onClick={() => setActiveModule('CLINICAL')}
+                    className={`p-2 rounded-full transition-all ${activeModule === 'CLINICAL' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/50' : 'text-slate-500 hover:text-white'}`}
+                    title="Clinical Hub"
+                  >
+                      <Activity className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setActiveModule('DISCOVERY')}
+                    className={`p-2 rounded-full transition-all ${activeModule === 'DISCOVERY' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/50' : 'text-slate-500 hover:text-white'}`}
+                    title="Discovery Lab"
+                  >
+                      <FlaskConical className="w-4 h-4" />
+                  </button>
+              </div>
           </div>
         </div>
       </header>
@@ -312,7 +383,7 @@ const App: React.FC = () => {
                                             <Database className="w-4 h-4" /> Twin Source Data
                                         </h3>
                                         {inputData && (
-                                            <button onClick={() => setInputData("")} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                                            <button onClick={() => { setInputData(""); setUploadedFileName(null); }} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
                                                 <X className="w-3 h-3" /> Clear
                                             </button>
                                         )}
@@ -340,17 +411,43 @@ const App: React.FC = () => {
 
                                     <div className="flex-grow bg-slate-950/50 rounded-xl border border-slate-800 relative overflow-hidden min-h-[300px]">
                                         {inputType === 'upload' && (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 group transition-all">
-                                                <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-emerald-500/50">
-                                                    <Upload className="w-6 h-6 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                                            !uploadedFileName ? (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 group transition-all">
+                                                    <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-emerald-500/50">
+                                                        <Upload className="w-6 h-6 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                                                    </div>
+                                                    <h4 className="text-white font-bold mb-2">Drag & Drop DNA File (VCF)</h4>
+                                                    <p className="text-slate-500 text-xs mb-6 max-w-xs">Supports .VCF, .TXT (23andMe), .FASTA</p>
+                                                    <label className="px-6 py-2.5 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-emerald-50 transition-colors shadow-lg hover:shadow-emerald-500/20">
+                                                        Browse Files
+                                                        <input type="file" onChange={handleFileUpload} className="hidden" accept=".vcf,.txt,.fasta,.csv" />
+                                                    </label>
                                                 </div>
-                                                <h4 className="text-white font-bold mb-2">Drag & Drop DNA File (VCF)</h4>
-                                                <p className="text-slate-500 text-xs mb-6 max-w-xs">Supports .VCF, .TXT (23andMe), .FASTA</p>
-                                                <label className="px-6 py-2.5 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-emerald-50 transition-colors shadow-lg hover:shadow-emerald-500/20">
-                                                    Browse Files
-                                                    <input type="file" onChange={handleFileUpload} className="hidden" accept=".vcf,.txt,.fasta,.csv" />
-                                                </label>
-                                            </div>
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 animate-fade-in">
+                                                    <div className="w-16 h-16 bg-emerald-900/20 rounded-full flex items-center justify-center mb-4 border border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                                                        <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                                                    </div>
+                                                    <h4 className="text-white font-bold mb-2 text-lg">File Successfully Loaded</h4>
+                                                    <p className="text-emerald-400 font-mono text-xs mb-6 bg-emerald-900/20 px-3 py-1 rounded border border-emerald-500/20">
+                                                        {uploadedFileName}
+                                                    </p>
+                                                    <div className="flex gap-3">
+                                                        <button 
+                                                            onClick={() => { setInputData(""); setUploadedFileName(null); }}
+                                                            className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white border border-slate-700 hover:bg-slate-800 rounded-lg transition-all"
+                                                        >
+                                                            Remove File
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setInputType('paste')}
+                                                            className="px-4 py-2 text-xs font-bold text-emerald-400 border border-emerald-500/30 hover:bg-emerald-900/20 rounded-lg transition-all flex items-center gap-2"
+                                                        >
+                                                            <FileCode className="w-3 h-3" /> View Raw Data
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )
                                         )}
                                         {inputType === 'paste' && (
                                             <textarea 
@@ -421,19 +518,36 @@ const App: React.FC = () => {
                                     
                                     <div className="mt-8 space-y-4">
                                         <div className="bg-slate-900/40 p-3 rounded-lg border border-indigo-500/20">
-                                           <div className="flex items-center gap-2 mb-2">
-                                              <Globe2 className="w-4 h-4 text-indigo-400" />
-                                              <span className="text-xs font-bold text-slate-300">Bio-Geographical Ancestry</span>
-                                           </div>
-                                           <select 
-                                             value={selectedAncestry}
-                                             onChange={(e) => setSelectedAncestry(e.target.value as AncestryGroup)}
-                                             className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg p-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                           >
-                                              {ANCESTRY_OPTIONS.map(opt => (
-                                                  <option key={opt.id} value={opt.id}>{opt.label} - {opt.desc}</option>
-                                              ))}
-                                           </select>
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Settings2 className="w-4 h-4 text-indigo-400" />
+                                                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Calibration</span>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Genome Build</label>
+                                                    <select 
+                                                        value={selectedGenomeBuild}
+                                                        onChange={(e) => setSelectedGenomeBuild(e.target.value as GenomeBuild)}
+                                                        className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:border-indigo-500 outline-none"
+                                                    >
+                                                        <option value="GRCh38">GRCh38 (hg38)</option>
+                                                        <option value="GRCh37">GRCh37 (hg19)</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Ancestry Model</label>
+                                                    <select 
+                                                        value={selectedAncestry}
+                                                        onChange={(e) => setSelectedAncestry(e.target.value as AncestryGroup)}
+                                                        className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg p-2 focus:border-indigo-500 outline-none"
+                                                    >
+                                                        {ANCESTRY_OPTIONS.map(opt => (
+                                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -499,6 +613,15 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
+                             {/* ADDED NEW ANALYSIS BUTTON */}
+                             <button 
+                                onClick={handleReset}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-all shadow-lg"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                New Analysis
+                            </button>
+                            
                             <button 
                                 onClick={handleDownloadPDF}
                                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-emerald-50 hover:shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all"

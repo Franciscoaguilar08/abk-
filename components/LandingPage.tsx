@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Scan, Dna, ArrowRight, Activity, ShieldCheck, Cpu, Network, Zap, Globe2, AlertTriangle, FileText, CheckCircle2, X } from 'lucide-react';
 import { BioBackground } from './BioBackground';
@@ -167,63 +168,72 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
 
       {/* === DISCLAIMER MODAL === */}
       {showDisclaimer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className="relative w-full max-w-2xl bg-[#0a0f1e] border border-amber-500/30 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.15)] overflow-hidden flex flex-col animate-fade-in-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-fade-in">
+            <div className="relative w-full max-w-2xl bg-[#0a0f1e] border border-amber-500/30 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.15)] overflow-hidden flex flex-col animate-fade-in-up transform scale-100">
                 
                 {/* Modal Header */}
-                <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-amber-900/10 to-transparent">
+                <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-amber-900/20 to-transparent">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
                             <AlertTriangle className="w-6 h-6" />
                         </div>
                         <div>
                             <h2 className="text-xl font-brand font-bold text-white tracking-wide">Protocolo Legal</h2>
-                            <span className="text-[10px] text-amber-500 uppercase font-mono tracking-widest">Renuncia de Responsabilidad</span>
+                            <span className="text-[10px] text-amber-500 uppercase font-mono tracking-widest font-bold">Renuncia de Responsabilidad v1.0</span>
                         </div>
                     </div>
                     <button 
                         onClick={() => setShowDisclaimer(false)}
-                        className="p-2 text-slate-500 hover:text-white transition-colors"
+                        className="p-2 text-slate-500 hover:text-white transition-colors hover:bg-white/5 rounded-lg"
                     >
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
                 {/* Modal Content */}
-                <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar bg-[#0a0f1e]">
                     
-                    <div className="flex gap-4">
-                        <FileText className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
+                    <div className="flex gap-4 group">
+                        <div className="p-2 rounded bg-slate-900 border border-slate-800 text-slate-400 group-hover:border-violet-500/50 group-hover:text-violet-400 transition-colors h-fit">
+                             <FileText className="w-5 h-5" />
+                        </div>
                         <div>
-                            <h3 className="text-sm font-bold text-white mb-2 uppercase">1. Simulación Educativa</h3>
-                            <p className="text-sm text-slate-400 leading-relaxed">
+                            <h3 className="text-sm font-bold text-white mb-1 uppercase tracking-wide group-hover:text-violet-300 transition-colors">1. Simulación Educativa</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed text-justify">
                                 Esta aplicación es una <strong>herramienta de simulación e investigación</strong> ("Digital Twin"). Los resultados generados por IA (Gemini/AlphaMissense) son probabilísticos y no constituyen un diagnóstico médico definitivo.
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex gap-4">
-                        <Activity className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
+                    <div className="flex gap-4 group">
+                        <div className="p-2 rounded bg-slate-900 border border-slate-800 text-slate-400 group-hover:border-cyan-500/50 group-hover:text-cyan-400 transition-colors h-fit">
+                             <Activity className="w-5 h-5" />
+                        </div>
                         <div>
-                            <h3 className="text-sm font-bold text-white mb-2 uppercase">2. Validación Clínica Requerida</h3>
-                            <p className="text-sm text-slate-400 leading-relaxed">
+                            <h3 className="text-sm font-bold text-white mb-1 uppercase tracking-wide group-hover:text-cyan-300 transition-colors">2. Validación Clínica Requerida</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed text-justify">
                                 Cualquier variante genética identificada como "Patogénica" o de "Alto Riesgo" debe ser confirmada mediante pruebas de laboratorio certificadas (CLIA/CAP) y revisada por un profesional de la salud cualificado.
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex gap-4">
-                        <ShieldCheck className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
+                    <div className="flex gap-4 group">
+                        <div className="p-2 rounded bg-slate-900 border border-slate-800 text-slate-400 group-hover:border-emerald-500/50 group-hover:text-emerald-400 transition-colors h-fit">
+                             <ShieldCheck className="w-5 h-5" />
+                        </div>
                         <div>
-                            <h3 className="text-sm font-bold text-white mb-2 uppercase">3. Privacidad de Datos</h3>
-                            <p className="text-sm text-slate-400 leading-relaxed">
+                            <h3 className="text-sm font-bold text-white mb-1 uppercase tracking-wide group-hover:text-emerald-300 transition-colors">3. Privacidad de Datos</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed text-justify">
                                 Los datos genómicos cargados se procesan en tiempo real y no se almacenan permanentemente en nuestros servidores. Sin embargo, al usar servicios en la nube, usted acepta los términos de procesamiento de datos estándar.
                             </p>
                         </div>
                     </div>
 
-                    <div className="p-4 bg-amber-900/10 border border-amber-500/20 rounded-lg text-amber-200/80 text-xs text-center font-medium">
-                        Al continuar, usted confirma que entiende que este software es para fines demostrativos y educativos, y exime a los desarrolladores de cualquier responsabilidad por decisiones médicas tomadas basadas en estos datos.
+                    <div className="p-4 bg-amber-950/30 border border-amber-500/20 rounded-xl flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                        <p className="text-amber-200/80 text-[11px] leading-relaxed font-medium">
+                            Al continuar, confirma que entiende que este software es para fines demostrativos y educativos, y exime a los desarrolladores de cualquier responsabilidad por decisiones médicas tomadas basadas en estos datos.
+                        </p>
                     </div>
 
                 </div>
@@ -232,13 +242,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                 <div className="p-6 border-t border-white/10 bg-[#050914] flex justify-end gap-4">
                     <button 
                         onClick={() => setShowDisclaimer(false)}
-                        className="px-6 py-3 rounded-lg border border-slate-700 text-slate-300 font-bold text-sm hover:bg-slate-800 transition-colors uppercase tracking-wider"
+                        className="px-6 py-3 rounded-xl border border-slate-700 text-slate-400 font-bold text-xs hover:bg-slate-800 hover:text-white transition-colors uppercase tracking-wider"
                     >
-                        Cancelar
+                        Cancelar Operación
                     </button>
                     <button 
                         onClick={handleAccept}
-                        className="px-6 py-3 rounded-lg bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-bold text-sm shadow-lg shadow-violet-900/20 transition-all uppercase tracking-wider flex items-center gap-2"
+                        className="px-8 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-bold text-xs shadow-lg shadow-violet-900/20 hover:shadow-cyan-500/30 transition-all uppercase tracking-wider flex items-center gap-2 transform hover:translate-y-[-1px]"
                     >
                         <CheckCircle2 className="w-4 h-4" />
                         Aceptar y Entrar

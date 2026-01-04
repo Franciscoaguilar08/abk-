@@ -15,12 +15,17 @@ export const RiskDistributionChart: React.FC<RiskChartProps> = ({ variants }) =>
   const safeVariants = variants || [];
   const total = safeVariants.length;
 
-  // 1. Categorize Data
+  // 1. Categorize Data (Case Insensitive Matcher)
+  const isCritical = (lvl: string) => lvl?.toUpperCase().includes('PATHOGENIC') || lvl?.toUpperCase().includes('HIGH');
+  const isModerate = (lvl: string) => lvl?.toUpperCase().includes('MODERATE');
+  const isUncertain = (lvl: string) => lvl?.toUpperCase().includes('UNCERTAIN');
+  const isBenign = (lvl: string) => lvl?.toUpperCase().includes('BENIGN') || lvl?.toUpperCase().includes('LOW');
+
   const counts = {
-    critical: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.PATHOGENIC || v.riskLevel === VariantRiskLevel.HIGH).length,
-    moderate: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.MODERATE).length,
-    uncertain: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.UNCERTAIN).length,
-    benign: safeVariants.filter(v => v.riskLevel === VariantRiskLevel.LOW || v.riskLevel === VariantRiskLevel.BENIGN).length,
+    critical: safeVariants.filter(v => isCritical(v.riskLevel)).length,
+    moderate: safeVariants.filter(v => isModerate(v.riskLevel)).length,
+    uncertain: safeVariants.filter(v => isUncertain(v.riskLevel)).length,
+    benign: safeVariants.filter(v => isBenign(v.riskLevel)).length,
   };
 
   // 2. Calculate Percentages for Bar Widths
@@ -62,56 +67,56 @@ export const RiskDistributionChart: React.FC<RiskChartProps> = ({ variants }) =>
       </div>
 
       {/* DETAILED BREAKDOWN GRID */}
-      <div className="grid grid-cols-2 gap-3 flex-grow">
+      <div className="grid grid-cols-2 gap-4 flex-grow">
           
           {/* CRITICAL CARD */}
-          <div className="bg-red-900/10 border border-red-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-red-900/20 transition-colors">
-              <div className="flex items-center justify-between mb-2">
+          <div className="bg-red-900/10 border border-red-500/20 rounded-lg p-4 flex flex-col justify-between group hover:bg-red-900/20 transition-colors h-full">
+              <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase tracking-wider">
                       <ShieldAlert className="w-4 h-4" /> Pathogenic
                   </div>
-                  <span className="text-xl font-mono font-bold text-white">{counts.critical}</span>
+                  <span className="text-2xl font-mono font-bold text-white">{counts.critical}</span>
               </div>
-              <div className="text-[10px] text-red-200/60 leading-tight">
+              <div className="text-[11px] text-red-200/60 leading-relaxed">
                   High clinical impact. Immediate medical attention advised.
               </div>
           </div>
 
           {/* MODERATE CARD */}
-          <div className="bg-orange-900/10 border border-orange-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-orange-900/20 transition-colors">
-              <div className="flex items-center justify-between mb-2">
+          <div className="bg-orange-900/10 border border-orange-500/20 rounded-lg p-4 flex flex-col justify-between group hover:bg-orange-900/20 transition-colors h-full">
+              <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 text-orange-400 text-xs font-bold uppercase tracking-wider">
                       <AlertTriangle className="w-4 h-4" /> Moderate
                   </div>
-                  <span className="text-xl font-mono font-bold text-white">{counts.moderate}</span>
+                  <span className="text-2xl font-mono font-bold text-white">{counts.moderate}</span>
               </div>
-              <div className="text-[10px] text-orange-200/60 leading-tight">
+              <div className="text-[11px] text-orange-200/60 leading-relaxed">
                   Likely pathogenic or increased risk factor. Monitoring required.
               </div>
           </div>
 
           {/* UNCERTAIN CARD */}
-          <div className="bg-yellow-900/10 border border-yellow-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-yellow-900/20 transition-colors">
-              <div className="flex items-center justify-between mb-2">
+          <div className="bg-yellow-900/10 border border-yellow-500/20 rounded-lg p-4 flex flex-col justify-between group hover:bg-yellow-900/20 transition-colors h-full">
+              <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 text-yellow-400 text-xs font-bold uppercase tracking-wider">
                       <HelpCircle className="w-4 h-4" /> Uncertain (VUS)
                   </div>
-                  <span className="text-xl font-mono font-bold text-white">{counts.uncertain}</span>
+                  <span className="text-2xl font-mono font-bold text-white">{counts.uncertain}</span>
               </div>
-              <div className="text-[10px] text-yellow-200/60 leading-tight">
+              <div className="text-[11px] text-yellow-200/60 leading-relaxed">
                   Inconclusive data. Requires re-evaluation as evidence evolves.
               </div>
           </div>
 
           {/* BENIGN CARD */}
-          <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-lg p-3 flex flex-col justify-between group hover:bg-emerald-900/20 transition-colors">
-              <div className="flex items-center justify-between mb-2">
+          <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-lg p-4 flex flex-col justify-between group hover:bg-emerald-900/20 transition-colors h-full">
+              <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider">
                       <CheckCircle className="w-4 h-4" /> Benign
                   </div>
-                  <span className="text-xl font-mono font-bold text-white">{counts.benign}</span>
+                  <span className="text-2xl font-mono font-bold text-white">{counts.benign}</span>
               </div>
-              <div className="text-[10px] text-emerald-200/60 leading-tight">
+              <div className="text-[11px] text-emerald-200/60 leading-relaxed">
                   Common variations with no known negative health impact.
               </div>
           </div>
@@ -127,14 +132,22 @@ export const OncologyTargetChart: React.FC<OncologyRiskChartProps> = ({ profiles
     
     // Define Categories
     const categories = [
-        { id: 'DNA_REPAIR', label: 'DNA Repair Mechanism' },
-        { id: 'CELL_CYCLE', label: 'Cell Cycle Control' },
-        { id: 'METABOLISM', label: 'Metabolic Stability' },
-        { id: 'IMMUNITY', label: 'Immune Response' }
+        { id: 'DNA_REPAIR', label: 'DNA Repair Mechanism', tags: ['DNA', 'REPAIR', 'BRCA'] },
+        { id: 'CELL_CYCLE', label: 'Cell Cycle Control', tags: ['CYCLE', 'GROWTH', 'PROLIFERATION', 'SIGNAL', 'KINASE'] },
+        { id: 'METABOLISM', label: 'Metabolic Stability', tags: ['METABOL', 'ENERGY', 'MITO'] },
+        { id: 'IMMUNITY', label: 'Immune Response', tags: ['IMMUN', 'INFLAM'] }
     ];
 
-    // Helper to get profiles for a category
-    const getProfilesForCat = (catId: string) => safeProfiles.filter(p => p.functionalCategory === catId);
+    // Helper to get profiles for a category (Fuzzy Matching)
+    const getProfilesForCat = (catId: string, tags: string[]) => {
+        return safeProfiles.filter(p => {
+            const cat = p.functionalCategory?.toUpperCase() || '';
+            // 1. Direct ID Match (Normalized from Service)
+            if (cat === catId) return true;
+            // 2. Fallback Tag Match (For safety)
+            return tags.some(tag => cat.includes(tag));
+        });
+    };
 
     const getSystemStatus = (catProfiles: OncologyProfile[]) => {
         if (catProfiles.length === 0) return { label: 'INTACT', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: CheckCircle };
@@ -145,15 +158,15 @@ export const OncologyTargetChart: React.FC<OncologyRiskChartProps> = ({ profiles
     };
 
     return (
-        <div className="w-full h-full min-h-[300px] flex flex-col justify-center">
-            <div className="grid grid-cols-1 gap-3">
+        <div className="w-full h-full flex flex-col justify-between">
+            <div className="grid grid-cols-1 gap-4 flex-grow">
                 {categories.map((cat) => {
-                    const activeProfiles = getProfilesForCat(cat.id);
+                    const activeProfiles = getProfilesForCat(cat.id, cat.tags);
                     const status = getSystemStatus(activeProfiles);
                     const StatusIcon = status.icon;
 
                     return (
-                        <div key={cat.id} className={`p-3 rounded-lg border ${status.border} ${status.bg} flex items-center justify-between transition-all hover:bg-opacity-20`}>
+                        <div key={cat.id} className={`p-4 rounded-lg border ${status.border} ${status.bg} flex items-center justify-between transition-all hover:bg-opacity-20`}>
                             <div className="flex items-center gap-3">
                                 <div className={`p-2 rounded-full bg-slate-900/50 ${status.color}`}>
                                     <StatusIcon className="w-4 h-4" />

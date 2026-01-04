@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, AnalysisFocus, AncestryGroup, SandboxResult } from "../types";
+import { AnalysisResult, AnalysisFocus, AncestryGroup, SandboxResult, GenomeBuild } from "../types";
 import { batchFetchVariantData } from "./bioinformaticsService";
 import { getProteinStructuralContext } from "./proteinService";
 import { parseGenomicInput } from "./genomicParser";
@@ -9,8 +9,14 @@ import { ACMG_73, CPIC_PRIORITY } from "./geneLists";
 const modelId = "gemini-3-flash-preview"; 
 
 const getAIInstance = () => {
+    // SECURITY CRITICAL: 
+    // The API Key is accessed ONLY via the environment variable.
+    // It is never logged, stored in state, or exposed to the frontend UI.
     const apiKey = process.env.API_KEY;
+    
+    // Strict validation without exposing the key value
     if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY' || apiKey.includes('YOUR_KEY')) {
+        // Throw a generic error to trigger Offline Mode without leaking config details
         throw new Error("SIMULATION_MODE_TRIGGER");
     }
     return new GoogleGenAI({ apiKey: apiKey });
@@ -26,22 +32,67 @@ const extractRsIdsRegex = (text: string): string[] => {
 };
 
 /**
+ * DATA NORMALIZERS (CRITICAL FOR CHARTS)
+ */
+const normalizeRiskLevel = (val: string): string => {
+    if (!val) return 'UNCERTAIN';
+    const v = val.toUpperCase();
+    if (v.includes('PATHOGENIC')) return 'PATHOGENIC';
+    if (v.includes('LIKELY_PATHOGENIC')) return 'HIGH'; // Simplify likely pathogenic to high for charts
+    if (v.includes('HIGH')) return 'HIGH';
+    if (v.includes('MODERATE')) return 'MODERATE';
+    if (v.includes('UNCERTAIN')) return 'UNCERTAIN';
+    if (v.includes('BENIGN')) return 'BENIGN';
+    if (v.includes('LOW')) return 'LOW';
+    return 'UNCERTAIN';
+};
+
+const normalizeOncoCategory = (val: string): string => {
+    if (!val) return 'CELL_CYCLE';
+    const v = val.toUpperCase();
+    if (v.includes('DNA') || v.includes('REPAIR')) return 'DNA_REPAIR';
+    if (v.includes('CYCLE') || v.includes('GROWTH') || v.includes('PROLIFERATION') || v.includes('SIGNALING')) return 'CELL_CYCLE';
+    if (v.includes('METABOL') || v.includes('ENERGY') || v.includes('MITO')) return 'METABOLISM';
+    if (v.includes('IMMUN') || v.includes('INFLAM')) return 'IMMUNITY';
+    return 'CELL_CYCLE'; // Default bucket
+};
+
+/**
  * ATTEMPT TO REPAIR MALFORMED JSON
  */
 const jsonRepair = (jsonStr: string): string => {
     let repaired = jsonStr.trim();
+    
+    // 1. Close unclosed string if truncated
+    // Count unescaped quotes to see if we are inside a string
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < repaired.length; i++) {
+        if (escape) { escape = false; continue; }
+        if (repaired[i] === '\\') { escape = true; continue; }
+        if (repaired[i] === '"') { inString = !inString; }
+    }
+    if (inString) {
+        repaired += '"';
+    }
+
+    // 2. Balance Braces and Brackets
     const openBraces = (repaired.match(/{/g) || []).length;
     const closeBraces = (repaired.match(/}/g) || []).length;
     const openBrackets = (repaired.match(/\[/g) || []).length;
     const closeBrackets = (repaired.match(/\]/g) || []).length;
 
-    if (openBraces > closeBraces) {
-        repaired += "}".repeat(openBraces - closeBraces);
-    }
     if (openBrackets > closeBrackets) {
         repaired += "]".repeat(openBrackets - closeBrackets);
     }
+    if (openBraces > closeBraces) {
+        repaired += "}".repeat(openBraces - closeBraces);
+    }
+
+    // 3. Remove Trailing Commas (common syntax error in repaired JSON)
+    // Replace ",}" with "}" and ",]" with "]"
     repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
+    
     return repaired;
 };
 
@@ -65,9 +116,11 @@ const cleanAndParseJSON = (text: string) => {
   }
 
   if (startIndex === -1) {
+      // If no starting bracket found, try parsing raw or attempt repair if it looks like json chunks
       try { return JSON.parse(clean); } catch(e) { throw new Error("No JSON object found"); }
   }
 
+  // If we found a start, try to find the natural end
   let openChar = isArray ? '[' : '{';
   let closeChar = isArray ? ']' : '}';
   let balance = 0;
@@ -75,6 +128,7 @@ const cleanAndParseJSON = (text: string) => {
   let inString = false;
   let escape = false;
 
+  // Attempt to find the matching closing bracket
   for (let i = startIndex; i < clean.length; i++) {
       const char = clean[i];
       if (escape) { escape = false; continue; }
@@ -89,7 +143,14 @@ const cleanAndParseJSON = (text: string) => {
       }
   }
 
-  let jsonString = (endIndex !== -1) ? clean.substring(startIndex, endIndex + 1) : clean.substring(startIndex);
+  let jsonString = "";
+  if (endIndex !== -1) {
+      // We found a complete object
+      jsonString = clean.substring(startIndex, endIndex + 1);
+  } else {
+      // We didn't find the end, so it's likely truncated. Take everything from start.
+      jsonString = clean.substring(startIndex);
+  }
 
   try {
     return JSON.parse(jsonString);
@@ -109,7 +170,7 @@ export const analyzeGenomicData = async (
   genomicInput: string, 
   focusList: AnalysisFocus[] = ['COMPREHENSIVE'],
   ancestry: AncestryGroup = AncestryGroup.GLOBAL,
-  calibrationData: string | null = null,
+  genomeBuild: GenomeBuild = 'GRCh38',
   onStatusUpdate?: (status: string) => void
 ): Promise<AnalysisResult> => {
 
@@ -217,17 +278,23 @@ export const analyzeGenomicData = async (
     ROLE: You are an expert Clinical Genomicist.
     TASK: Analyze the 'CRITICAL VARIANTS' list.
     
-    FILTERING NOTICE:
-    The input has been strictly filtered.
-    - It ONLY contains variants in ACMG-73 (Actionable), CPIC (Pharma), or Pathogenic variants.
-    - Treat every variant in this list as potentially significant.
+    REFERENCE GENOME ASSEMBLY: ${genomeBuild}
+    
+    ONCOLOGY PROFILE RULES (STRICT):
+    - For EVERY variant in an oncology-related gene (including SERPINA1, MUTYH, CHEK2, etc.), you MUST provide full details.
+    - Predisposition: DO NOT leave blank. Specify the exact cancer risk (e.g., "Hepatocellular Carcinoma via Cirrhosis" for SERPINA1, or "Colorectal Cancer").
+    - Mechanism: Explain HOW it causes cancer (e.g., "Alpha-1 antitrypsin accumulation leads to liver damage").
+    - Notes: Provide clinical management context.
+    - Evidence Tier: Must be 'TIER_1_STRONG' if ClinVar is Pathogenic, otherwise assess accordingly.
     
     CRITICAL RULE: PENETRANCE LOGIC
     1. FREQUENCY CHECK: If gnomAD Frequency > 1% (0.01) AND condition is severe -> Assume LOW PENETRANCE.
     2. KNOWLEDGE CHECK: Apply known penetrance data for genes like HFE, LRRK2, GBA.
     3. RISK ADJUSTMENT: If Penetrance is LOW, downgrade 'riskLevel' (e.g. from HIGH to MODERATE) for healthy carriers.
 
-    OUTPUT: Valid JSON matching the schema.
+    OUTPUT GUIDELINES:
+    - Return Valid JSON matching the schema.
+    - IMPORTANT: KEEP TEXT SUMMARIES CONCISE.
   `;
 
   const prompt = `
@@ -238,10 +305,12 @@ export const analyzeGenomicData = async (
   
   FOCUS: ${focusList.join(', ')}
   ANCESTRY: ${ancestry}
+  GENOME BUILD: ${genomeBuild}
   
   INSTRUCTIONS:
   - Analyze ONLY the variants listed above.
   - Determine PENETRANCE.
+  - Populate oncologyProfiles meticulously. Do not return empty strings for 'predisposition' or 'notes'.
   - Return JSON.
   `;
 
@@ -313,7 +382,7 @@ export const analyzeGenomicData = async (
                               } 
                           } 
                       },
-                      oncologyProfiles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { gene: {type:Type.STRING}, variant: {type:Type.STRING}, evidenceTier: {type:Type.STRING}, mechanismOfAction: {type:Type.STRING}, cancerHallmark: {type:Type.STRING}, therapeuticImplications: {type:Type.ARRAY, items: {type:Type.STRING}}, riskScore: {type:Type.NUMBER}, citation: {type:Type.STRING}, functionalCategory: {type:Type.STRING} } } },
+                      oncologyProfiles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { gene: {type:Type.STRING}, variant: {type:Type.STRING}, evidenceTier: {type:Type.STRING}, mechanismOfAction: {type:Type.STRING}, cancerHallmark: {type:Type.STRING}, therapeuticImplications: {type:Type.ARRAY, items: {type:Type.STRING}}, riskScore: {type:Type.NUMBER}, citation: {type:Type.STRING}, functionalCategory: {type:Type.STRING}, predisposition: {type:Type.STRING}, notes: {type:Type.STRING} } } },
                       phenotypeTraits: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { trait: {type:Type.STRING}, category: {type:Type.STRING}, prediction: {type:Type.STRING}, confidence: {type:Type.STRING}, description: {type:Type.STRING}, gene: {type:Type.STRING} } } }
                     }
                   }
@@ -323,29 +392,40 @@ export const analyzeGenomicData = async (
         if (!response.text) throw new Error("Empty AI Response");
         const parsed = cleanAndParseJSON(response.text);
         
-        // Data Injection
+        // Data Normalization & Injection
         const enhancedVariants = (parsed.variants || []).map((v: any) => {
              const real = keptDbRecords.find(r => r.rsId === v.variant || (v.variant && v.variant.includes(r.rsId)));
              // Apply local zygosity if available from parser
              const localZ = parsedVariants.find(p => p.rsId === v.variant || v.variant.includes(p.rsId))?.zygosity;
              
-             if (real || localZ) {
-                 return {
-                     ...v,
-                     clinVarSignificance: real?.clinVarSignificance || v.clinVarSignificance,
-                     caddScore: real?.caddPhred || v.caddScore,
-                     populationFrequency: real?.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency,
-                     zygosity: localZ || v.zygosity // Prefer parser zygosity
-                 }
+             // Normalize Risk Level for Charts
+             const normalizedRisk = normalizeRiskLevel(v.riskLevel);
+
+             return {
+                 ...v,
+                 riskLevel: normalizedRisk, // FORCE NORMALIZATION
+                 clinVarSignificance: real?.clinVarSignificance || v.clinVarSignificance,
+                 caddScore: real?.caddPhred || v.caddScore,
+                 populationFrequency: real?.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency,
+                 zygosity: localZ || v.zygosity // Prefer parser zygosity
              }
-             return v;
         });
 
-        return { ...parsed, variants: enhancedVariants } as AnalysisResult;
+        // Normalize Oncology Profiles
+        const enhancedOncology = (parsed.oncologyProfiles || []).map((p: any) => ({
+            ...p,
+            functionalCategory: normalizeOncoCategory(p.functionalCategory)
+        }));
+
+        return { 
+            ...parsed, 
+            variants: enhancedVariants,
+            oncologyProfiles: enhancedOncology 
+        } as AnalysisResult;
 
     } catch (e: any) {
         if (e.message === 'SIMULATION_MODE_TRIGGER') throw e;
-        console.warn(`Retry ${retryCount + 1}`, e);
+        console.warn(`Retry ${retryCount + 1}`, e); // This log is safe, e contains standard error object
         retryCount++;
         if (retryCount === maxRetries) throw new Error("CONNECTION_FAILED");
         await new Promise(r => setTimeout(r, 1000));
@@ -373,12 +453,12 @@ export const analyzeDiscoveryData = async (
         if (onStatusUpdate) onStatusUpdate(`CONNECTING TO UNIPROT KB FOR ${geneName}...`);
         const proteinData = await getProteinStructuralContext(geneName, position);
         
-        if (onStatusUpdate) onStatusUpdate("RUNNING IN-SILICO DOCKING PREDICTION...");
+        if (onStatusUpdate) onStatusUpdate("RUNNING IN-SILICO DOCKING & CLINICAL CHECK...");
 
         // 3. CONSTRUCT SCIENTIFIC PROMPT
         const prompt = `
-          ROLE: Computational Biologist & Expert Pharmacologist.
-          TASK: Generate a high-fidelity interaction simulation for the gene/variant: "${targetInput}".
+          ROLE: Expert Computational Biologist & Clinical Geneticist.
+          TASK: Generate a high-fidelity Laboratory simulation for the gene/variant: "${targetInput}".
           
           === BIOLOGICAL GROUND TRUTH (FROM UNIPROT DATABASE) ===
           - UniProt ID: ${proteinData?.uniprotId || "Unknown (AI Inference)"}
@@ -390,8 +470,9 @@ export const analyzeDiscoveryData = async (
           USER LITERATURE CONTEXT (If any): ${literatureContext || "None provided."}
 
           INSTRUCTIONS:
-          Based strictly on the Structural Analysis above, generate a JSON response.
-          If the mutation hits an "ACTIVE_SITE" or "BINDING_SITE", predict RESISTANCE or HYPERSENSITIVITY.
+          1. STRUCTURE: Based strictly on the UniProt analysis, predict docking energy and structural impact.
+          2. CLINICAL: Act as a clinical variant scientist. Apply ACMG criteria. Classify the variant (Pathogenic, Benign, etc.).
+          3. HYPOTHESIS: Synthesize structure + clinic into a therapeutic hypothesis.
 
           OUTPUT FORMAT (Strict JSON, no markdown):
           {
@@ -403,6 +484,12 @@ export const analyzeDiscoveryData = async (
               "ligandName": "Name of a real drug (FDA/Trial) for this target",
               "bindingEnergy": -9.5, 
               "activeSiteResidues": [${position || 100}, ${position ? position + 5 : 105}, ${position ? position - 5 : 95}]
+            },
+            "clinical": {
+               "significance": "PATHOGENIC",
+               "acmgCriteria": ["PVS1 (Null variant)", "PM2 (Absent in controls)"],
+               "associatedCondition": "Associated disease name (e.g. Cystic Fibrosis)",
+               "clinVarId": "Variation ID (Simulated)"
             },
             "network": {
                "nodes": [
@@ -456,6 +543,10 @@ export const analyzeDiscoveryData = async (
                 functionDescription: proteinData.functionDescription,
                 structuralFeatures: proteinData.structuralFeatures
             };
+            // FORCE REAL UNIPROT ID INTO DOCKING TO ENSURE VIEWER USES REAL PDB
+            if (parsed.docking) {
+                parsed.docking.uniprotId = proteinData.uniprotId;
+            }
         }
         
         return parsed;

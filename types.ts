@@ -10,6 +10,8 @@ export enum AncestryGroup {
     EUROPEAN = 'EUROPEAN'
 }
 
+export type GenomeBuild = 'GRCh37' | 'GRCh38';
+
 export enum VariantRiskLevel {
     PATHOGENIC = 'PATHOGENIC',
     HIGH = 'HIGH',
@@ -189,6 +191,14 @@ export interface ProteinRealData {
     structuralFeatures: string[];
 }
 
+// NEW: Clinical Data for Discovery Lab
+export interface LabClinicalData {
+    significance: 'PATHOGENIC' | 'LIKELY_PATHOGENIC' | 'UNCERTAIN' | 'BENIGN';
+    acmgCriteria: string[]; // e.g. ["PVS1", "PM2"]
+    associatedCondition: string;
+    clinVarId?: string;
+}
+
 export interface SandboxResult {
     targetId: string;
     hypothesis: string;
@@ -200,6 +210,9 @@ export interface SandboxResult {
     
     // New: The raw biological data
     proteinMetaData?: ProteinRealData;
+    
+    // New: Clinical Data in the Lab
+    clinical?: LabClinicalData;
 
     // New Detailed Explanations for Step-by-Step UI
     detailedAnalysis: {
