@@ -472,7 +472,8 @@ export const analyzeDiscoveryData = async (
           INSTRUCTIONS:
           1. STRUCTURE: Based strictly on the UniProt analysis, predict docking energy and structural impact.
           2. CLINICAL: Act as a clinical variant scientist. Apply ACMG criteria. Classify the variant (Pathogenic, Benign, etc.).
-          3. HYPOTHESIS: Synthesize structure + clinic into a therapeutic hypothesis.
+          3. PATHOLOGY: Determine the specific tumor types or diseases most strongly associated with this specific variant.
+          4. HYPOTHESIS: Synthesize structure + clinic into a therapeutic hypothesis.
 
           OUTPUT FORMAT (Strict JSON, no markdown):
           {
@@ -508,17 +509,17 @@ export const analyzeDiscoveryData = async (
                {"title": "Study on ${geneName} Variants", "source": "Nature Genetics (AI Sim)", "summary": "Relevance of domain mutation.", "relevanceScore": 95},
                {"title": "Clinical Resistance Patterns", "source": "PubMed (AI Sim)", "summary": "Drug interaction data.", "relevanceScore": 88}
             ],
-            "stratification": [
-               {"population": "Global", "alleleFrequency": 2.5, "predictedEfficacy": 75},
-               {"population": "European", "alleleFrequency": 3.1, "predictedEfficacy": 80},
-               {"population": "East Asian", "alleleFrequency": 1.8, "predictedEfficacy": 60}
+            "diseaseRisks": [
+               {"condition": "Main Associated Tumor", "associationPercentage": 85, "severity": "HIGH"},
+               {"condition": "Secondary Condition", "associationPercentage": 30, "severity": "MODERATE"},
+               {"condition": "Rare Phenotype", "associationPercentage": 5, "severity": "LOW"}
             ],
             "convergenceInsight": "Synthesize the Structural Analysis + Drug Mechanism into a theory of action.",
             "detailedAnalysis": {
                "dockingDynamics": "Explain H-bonds/Steric hindrance based on the amino acid change.",
                "pathwayKinetics": "Impact on downstream signaling.",
                "evidenceSynthesis": "Summary of consensus.",
-               "populationStat": "Brief stat analysis."
+               "populationStat": "Brief analysis of the disease association data."
             }
           }
         `;

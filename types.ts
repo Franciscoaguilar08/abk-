@@ -178,10 +178,11 @@ export interface LiteratureInsight {
     relevanceScore: number;
 }
 
-export interface PopulationData {
-    population: string;
-    alleleFrequency: number;
-    predictedEfficacy: number; 
+// Replaced PopulationData with DiseaseRisk
+export interface DiseaseRisk {
+    condition: string;
+    associationPercentage: number; // e.g. 85 for "85% Association"
+    severity: 'HIGH' | 'MODERATE' | 'LOW';
 }
 
 // NEW: Holds real data from UniProt to display in UI
@@ -205,7 +206,7 @@ export interface SandboxResult {
     docking: DockingSimulation;
     network: { nodes: NetworkNode[], links: NetworkLink[] };
     literature: LiteratureInsight[];
-    stratification: PopulationData[];
+    diseaseRisks: DiseaseRisk[]; // Renamed from stratification
     convergenceInsight: string;
     
     // New: The raw biological data

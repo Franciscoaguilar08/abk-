@@ -60,10 +60,10 @@ const MOCK_SANDBOX_RESULT: SandboxResult = {
         { title: "Kras G12C Inhibition", source: "Nature, 2019", summary: "Discovery of a covalent inhibitor.", relevanceScore: 98 },
         { title: "Resistance Mechanisms", source: "NEJM, 2021", summary: "Acquired resistance via feedback loops.", relevanceScore: 85 }
     ],
-    stratification: [
-        { population: "NSCLC (Smokers)", alleleFrequency: 13.0, predictedEfficacy: 85 },
-        { population: "Colorectal Cancer", alleleFrequency: 3.0, predictedEfficacy: 40 },
-        { population: "Pancreatic Cancer", alleleFrequency: 1.5, predictedEfficacy: 55 }
+    diseaseRisks: [
+        { condition: "Lung Adenocarcinoma", associationPercentage: 85, severity: "HIGH" },
+        { condition: "Colorectal Cancer", associationPercentage: 12, severity: "MODERATE" },
+        { condition: "Pancreatic Ductal Adeno.", associationPercentage: 3, severity: "LOW" }
     ],
     convergenceInsight: "Convergence of structural vulnerability (Cys12) and high clinical prevalence suggests high priority for covalent inhibitor development.",
     detailedAnalysis: {
@@ -433,11 +433,14 @@ export const DiscoveryLab: React.FC<DiscoveryLabProps> = ({ userVariants = [] })
                                 <div className="text-sm text-white">{result.clinical.associatedCondition}</div>
                             </div>
 
-                            {/* Population Data (Stratification) Moved Here */}
-                            {result.stratification && (
-                                <div className="pt-2 border-t border-white/5 mt-2">
-                                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Population Prevalence</div>
-                                     <StratificationViz data={result.stratification} />
+                            {/* NEW: DISEASE ASSOCIATION VIZ (Replaces Population Stratification) */}
+                            {result.diseaseRisks && (
+                                <div className="pt-4 border-t border-white/5 mt-4">
+                                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <Activity className="w-3 h-3 text-rose-400" />
+                                        Associated Pathology Risks
+                                     </div>
+                                     <DiseaseRiskViz data={result.diseaseRisks} />
                                 </div>
                             )}
 
@@ -621,33 +624,45 @@ const CyberNetworkGraph: React.FC<{nodes: NetworkNode[], links: NetworkLink[]}> 
     );
 };
 
-const StratificationViz: React.FC<{data: any[]}> = ({ data }) => {
-    const sorted = [...data].sort((a, b) => b.predictedEfficacy - a.predictedEfficacy);
-    const radiusStep = 35;
-    const center = 150;
+// NEW: DISEASE ASSOCIATION VISUALIZER (Horizontal bars with risk metrics)
+const DiseaseRiskViz: React.FC<{data: any[]}> = ({ data }) => {
+    // Sort by percentage high to low
+    const sorted = [...data].sort((a, b) => b.associationPercentage - a.associationPercentage);
     
     return (
-        <svg width="100%" height="100%" viewBox="0 0 300 300" className="max-h-[280px] w-full">
+        <div className="space-y-4 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
             {sorted.map((item, i) => {
-                const r = 50 + (i * radiusStep);
-                const circumference = 2 * Math.PI * r;
-                const offset = circumference - (item.predictedEfficacy / 100) * circumference;
-                const color = item.predictedEfficacy > 80 ? '#10b981' : item.predictedEfficacy > 50 ? '#f59e0b' : '#ef4444';
+                const isHigh = item.severity === 'HIGH' || item.associationPercentage > 70;
+                const isModerate = item.severity === 'MODERATE' || (item.associationPercentage > 30 && item.associationPercentage <= 70);
+                
+                const barColor = isHigh ? 'bg-rose-500' : isModerate ? 'bg-orange-400' : 'bg-emerald-400';
+                const textColor = isHigh ? 'text-rose-400' : isModerate ? 'text-orange-400' : 'text-emerald-400';
                 
                 return (
-                    <g key={i}>
-                        <circle cx={center} cy={center} r={r} fill="none" stroke="#1e293b" strokeWidth="10" />
-                        <circle cx={center} cy={center} r={r} fill="none" stroke={color} strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={circumference} strokeLinecap="round" transform={`rotate(-90 ${center} ${center})`}>
-                            <animate attributeName="stroke-dashoffset" from={circumference} to={offset} dur="1.5s" fill="freeze" />
-                        </circle>
-                        <text x={center + 10} y={center - r - 5} fill="#94a3b8" fontSize="10" fontFamily="monospace" fontWeight="bold">{item.population}</text>
-                        <text x={center + 10} y={center - r + 8} fill="white" fontSize="11" fontWeight="bold" fontFamily="monospace">{item.predictedEfficacy}%</text>
-                    </g>
+                    <div key={i} className="group">
+                        <div className="flex justify-between items-end mb-1">
+                            <span className="text-[11px] font-bold text-slate-300 group-hover:text-white transition-colors">{item.condition}</span>
+                            <span className={`text-[10px] font-mono font-bold ${textColor}`}>
+                                {item.associationPercentage}%
+                            </span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                            <div 
+                                className={`h-full rounded-full ${barColor} relative`} 
+                                style={{ width: `${item.associationPercentage}%` }}
+                            >
+                                <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[size:1rem_1rem] opacity-30"></div>
+                            </div>
+                        </div>
+                        {isHigh && (
+                            <div className="mt-1 flex items-center gap-1.5 text-[9px] text-rose-500/70 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <AlertTriangle className="w-2.5 h-2.5" /> High Risk Association
+                            </div>
+                        )}
+                    </div>
                 );
             })}
-             <circle cx={center} cy={center} r="15" fill="#334155" />
-             <circle cx={center} cy={center} r="6" fill="#10b981"><animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite" /></circle>
-        </svg>
+        </div>
     )
 }
 
