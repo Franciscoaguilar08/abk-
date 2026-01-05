@@ -34,8 +34,8 @@ const extractRsIdsRegex = (text: string): string[] => {
 /**
  * DATA NORMALIZERS (CRITICAL FOR CHARTS)
  */
-const normalizeRiskLevel = (val: string): string => {
-    if (!val) return 'UNCERTAIN';
+const normalizeRiskLevel = (val: any): string => {
+    if (!val || typeof val !== 'string') return 'UNCERTAIN';
     const v = val.toUpperCase();
     if (v.includes('PATHOGENIC')) return 'PATHOGENIC';
     if (v.includes('LIKELY_PATHOGENIC')) return 'HIGH'; // Simplify likely pathogenic to high for charts
@@ -392,24 +392,33 @@ export const analyzeGenomicData = async (
         if (!response.text) throw new Error("Empty AI Response");
         const parsed = cleanAndParseJSON(response.text);
         
-        // Data Normalization & Injection
-        const enhancedVariants = (parsed.variants || []).map((v: any) => {
-             const real = keptDbRecords.find(r => r.rsId === v.variant || (v.variant && v.variant.includes(r.rsId)));
-             // Apply local zygosity if available from parser
-             const localZ = parsedVariants.find(p => p.rsId === v.variant || v.variant.includes(p.rsId))?.zygosity;
-             
-             // Normalize Risk Level for Charts
-             const normalizedRisk = normalizeRiskLevel(v.riskLevel);
+        // Data Normalization & Injection (CRITICAL FIX: Handle nulls from AI)
+        const enhancedVariants = (parsed.variants || [])
+            .filter((v: any) => v && typeof v === 'object') // Filter out nulls
+            .map((v: any) => {
+                 // Safe lookup for zygosity
+                 let localZ = null;
+                 if (v.variant && typeof v.variant === 'string') {
+                     localZ = parsedVariants.find(p => p.rsId === v.variant || v.variant.includes(p.rsId))?.zygosity;
+                 }
+                 
+                 const real = keptDbRecords.find(r => 
+                    (v.variant && typeof v.variant === 'string' && r.rsId === v.variant) || 
+                    (v.variant && typeof v.variant === 'string' && v.variant.includes(r.rsId))
+                 );
 
-             return {
-                 ...v,
-                 riskLevel: normalizedRisk, // FORCE NORMALIZATION
-                 clinVarSignificance: real?.clinVarSignificance || v.clinVarSignificance,
-                 caddScore: real?.caddPhred || v.caddScore,
-                 populationFrequency: real?.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency,
-                 zygosity: localZ || v.zygosity // Prefer parser zygosity
-             }
-        });
+                 // Normalize Risk Level for Charts
+                 const normalizedRisk = normalizeRiskLevel(v.riskLevel);
+
+                 return {
+                     ...v,
+                     riskLevel: normalizedRisk, // FORCE NORMALIZATION
+                     clinVarSignificance: real?.clinVarSignificance || v.clinVarSignificance,
+                     caddScore: real?.caddPhred || v.caddScore,
+                     populationFrequency: real?.gnomadFreq ? `${(real.gnomadFreq * 100).toFixed(4)}%` : v.populationFrequency,
+                     zygosity: localZ || v.zygosity // Prefer parser zygosity
+                 }
+            });
 
         // Normalize Oncology Profiles
         const enhancedOncology = (parsed.oncologyProfiles || []).map((p: any) => ({

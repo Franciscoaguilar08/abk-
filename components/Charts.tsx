@@ -15,11 +15,16 @@ export const RiskDistributionChart: React.FC<RiskChartProps> = ({ variants }) =>
   const safeVariants = variants || [];
   const total = safeVariants.length;
 
-  // 1. Categorize Data (Case Insensitive Matcher)
-  const isCritical = (lvl: string) => lvl?.toUpperCase().includes('PATHOGENIC') || lvl?.toUpperCase().includes('HIGH');
-  const isModerate = (lvl: string) => lvl?.toUpperCase().includes('MODERATE');
-  const isUncertain = (lvl: string) => lvl?.toUpperCase().includes('UNCERTAIN');
-  const isBenign = (lvl: string) => lvl?.toUpperCase().includes('BENIGN') || lvl?.toUpperCase().includes('LOW');
+  // 1. Categorize Data (Case Insensitive Matcher with Safety Check)
+  const safeMatch = (val: string | undefined, keyword: string) => {
+      if (!val || typeof val !== 'string') return false;
+      return val.toUpperCase().includes(keyword);
+  };
+
+  const isCritical = (lvl: string) => safeMatch(lvl, 'PATHOGENIC') || safeMatch(lvl, 'HIGH');
+  const isModerate = (lvl: string) => safeMatch(lvl, 'MODERATE');
+  const isUncertain = (lvl: string) => safeMatch(lvl, 'UNCERTAIN');
+  const isBenign = (lvl: string) => safeMatch(lvl, 'BENIGN') || safeMatch(lvl, 'LOW');
 
   const counts = {
     critical: safeVariants.filter(v => isCritical(v.riskLevel)).length,
