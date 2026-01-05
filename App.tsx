@@ -79,6 +79,9 @@ export const App: React.FC = () => {
   const [selectedAncestry, setSelectedAncestry] = useState<AncestryGroup>(AncestryGroup.GLOBAL);
   const [selectedGenomeBuild, setSelectedGenomeBuild] = useState<GenomeBuild>('GRCh38'); // Default to modern
   
+  // Language State
+  const [language, setLanguage] = useState<'es' | 'en'>('en');
+
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingStatus, setLoadingStatus] = useState<string>("Initializing...");
@@ -157,6 +160,7 @@ export const App: React.FC = () => {
           selectedTargets, 
           selectedAncestry,
           selectedGenomeBuild,
+          language, // Pass language to match function signature
           (status) => setLoadingStatus(status) 
       );
       
@@ -239,7 +243,7 @@ export const App: React.FC = () => {
   // --- Render ---
 
   if (currentView === 'LANDING') {
-    return <LandingPage onEnter={enterHub} />;
+    return <LandingPage onEnter={enterHub} language={language} setLanguage={setLanguage} />;
   }
 
   // Common Header

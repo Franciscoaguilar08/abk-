@@ -171,6 +171,7 @@ export const analyzeGenomicData = async (
   focusList: AnalysisFocus[] = ['COMPREHENSIVE'],
   ancestry: AncestryGroup = AncestryGroup.GLOBAL,
   genomeBuild: GenomeBuild = 'GRCh38',
+  language: 'es' | 'en' = 'en',
   onStatusUpdate?: (status: string) => void
 ): Promise<AnalysisResult> => {
 
@@ -274,11 +275,16 @@ export const analyzeGenomicData = async (
   // --- STEP 4: SYNTHESIS ---
   if(onStatusUpdate) onStatusUpdate("Generating Clinical Report...");
   
+  const outputLanguageInstruction = language === 'es' 
+      ? "OUTPUT LANGUAGE: SPANISH (Must return valid JSON, but all description fields must be in Spanish)." 
+      : "OUTPUT LANGUAGE: ENGLISH.";
+
   const systemInstruction = `
     ROLE: You are an expert Clinical Genomicist.
     TASK: Analyze the 'CRITICAL VARIANTS' list.
     
     REFERENCE GENOME ASSEMBLY: ${genomeBuild}
+    ${outputLanguageInstruction}
     
     ONCOLOGY PROFILE RULES (STRICT):
     - For EVERY variant in an oncology-related gene (including SERPINA1, MUTYH, CHEK2, etc.), you MUST provide full details.

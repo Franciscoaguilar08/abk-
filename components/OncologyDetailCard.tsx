@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { OncologyProfile } from '../types';
-import { ShieldAlert, Crosshair, BookOpen, Dna, Microscope, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Crosshair, BookOpen, Dna, Microscope, AlertTriangle, CheckCircle2, Activity } from 'lucide-react';
 
 interface OncologyDetailCardProps {
     profile: OncologyProfile;
@@ -16,8 +16,15 @@ const getTierInfo = (tier: string) => {
     }
 };
 
+const getRiskVisuals = (score: number) => {
+    if (score >= 75) return { color: 'bg-red-500', text: 'text-red-400', label: 'HIGH RISK' };
+    if (score >= 40) return { color: 'bg-orange-400', text: 'text-orange-400', label: 'MODERATE RISK' };
+    return { color: 'bg-emerald-500', text: 'text-emerald-400', label: 'LOW RISK' };
+};
+
 export const OncologyDetailCard: React.FC<OncologyDetailCardProps> = ({ profile }) => {
     const tier = getTierInfo(profile.evidenceTier);
+    const risk = getRiskVisuals(profile.riskScore);
 
     return (
         <div className={`glass-panel rounded-xl overflow-hidden border-l-4 ${tier.border} relative group transition-all hover:bg-slate-900/50`}>
@@ -39,16 +46,32 @@ export const OncologyDetailCard: React.FC<OncologyDetailCardProps> = ({ profile 
                     </div>
                 </div>
 
-                <div className="text-right">
-                    <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Oncogenic Probability</div>
-                    <div className="flex items-center justify-end gap-2">
-                        <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div className="text-right min-w-[140px]">
+                    <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 flex justify-end items-center gap-1">
+                        <Activity className="w-3 h-3" /> Oncogenic Score
+                    </div>
+                    
+                    <div className="flex flex-col items-end">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 rounded bg-slate-950 border border-slate-800 ${risk.text}`}>
+                                {risk.label}
+                            </span>
+                            <span className="font-mono text-xl font-bold text-white">{profile.riskScore}%</span>
+                        </div>
+                        
+                        {/* Custom Progress Bar */}
+                        <div className="w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
+                            {/* Background ticks */}
+                            <div className="absolute inset-0 flex justify-between px-1 z-10">
+                                <div className="w-px h-full bg-slate-900/50"></div>
+                                <div className="w-px h-full bg-slate-900/50"></div>
+                                <div className="w-px h-full bg-slate-900/50"></div>
+                            </div>
                             <div 
-                                className={`h-full ${profile.riskScore > 75 ? 'bg-red-500' : 'bg-orange-400'}`} 
+                                className={`h-full rounded-full shadow-[0_0_10px_currentColor] transition-all duration-1000 ${risk.color}`} 
                                 style={{ width: `${profile.riskScore}%` }}
                             ></div>
                         </div>
-                        <span className="font-mono text-lg font-bold text-white">{profile.riskScore}%</span>
                     </div>
                 </div>
             </div>

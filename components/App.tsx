@@ -1,25 +1,26 @@
 
 import React, { useState, useEffect } from 'react';
-import { analyzeGenomicData } from './services/geminiService';
-import { generateClinicalReport } from './services/pdfService';
-import { AnalysisResult, AnalysisFocus, AncestryGroup, GenomeBuild } from './types';
-import { VariantCard } from './components/VariantCard';
-import { PharmaCard } from './components/PharmaCard';
-import { PhenotypeCard } from './components/PhenotypeCard';
-import { AncestryCard } from './components/AncestryCard';
-import { NDimensionalCard } from './components/NDimensionalCard';
-import { LandingPage } from './components/LandingPage';
-import { CommandHub } from './components/CommandHub';
-import { DiscoveryLab } from './components/DiscoveryLab';
-import { RiskDistributionChart, OncologyTargetChart } from './components/Charts';
-import { SciFiButton } from './components/SciFiButton';
-import { BioBackground } from './components/BioBackground';
+import { analyzeGenomicData } from '../services/geminiService';
+import { generateClinicalReport } from '../services/pdfService';
+import { AnalysisResult, AnalysisFocus, AncestryGroup, GenomeBuild } from '../types';
+import { VariantCard } from '../components/VariantCard';
+import { PharmaCard } from '../components/PharmaCard';
+import { PhenotypeCard } from '../components/PhenotypeCard';
+import { AncestryCard } from '../components/AncestryCard';
+import { NDimensionalCard } from '../components/NDimensionalCard';
+import { OncologyDetailCard } from './OncologyDetailCard';
+import { LandingPage } from '../components/LandingPage';
+import { CommandHub } from '../components/CommandHub';
+import { DiscoveryLab } from '../components/DiscoveryLab';
+import { RiskDistributionChart, OncologyTargetChart } from '../components/Charts';
+import { SciFiButton } from '../components/SciFiButton';
+import { BioBackground } from '../components/BioBackground';
 import { 
   Microscope, Activity, Dna, FileText, Zap, Target, 
   FileJson, CheckCircle2, User, Fingerprint, 
   Upload, FileCode, Database, ArrowRight, X, Server, ShieldCheck, Info, Download, Globe2, Network, Search, Pill, FlaskConical, LayoutGrid, AlertCircle, Layers, RotateCcw, Lock, Unlock, Settings2
 } from 'lucide-react';
-import { PillIcon, AlertIcon } from './components/Icons';
+import { PillIcon, AlertIcon } from '../components/Icons';
 
 // Example Data Sets for Clinical
 const EXAMPLES = [
@@ -72,10 +73,11 @@ const ANCESTRY_OPTIONS = [
 type AppView = 'LANDING' | 'HUB' | 'WORKSPACE';
 type ModuleType = 'CLINICAL' | 'DISCOVERY';
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   // Navigation State
   const [currentView, setCurrentView] = useState<AppView>('LANDING');
   const [activeModule, setActiveModule] = useState<ModuleType>('CLINICAL');
+  const [language, setLanguage] = useState<'es' | 'en'>('es'); // Default Spanish based on user preference
 
   // Clinical App State
   const [inputData, setInputData] = useState<string>("");
@@ -163,7 +165,7 @@ const App: React.FC = () => {
 
     setLoading(true);
     setError(null);
-    setLoadingStatus("Initializing Analysis Protocol...");
+    setLoadingStatus(language === 'es' ? "Inicializando Protocolo de Análisis..." : "Initializing Analysis Protocol...");
     
     try {
       const analysis = await analyzeGenomicData(
@@ -171,6 +173,7 @@ const App: React.FC = () => {
           selectedTargets, 
           selectedAncestry,
           selectedGenomeBuild,
+          language, // Pass language choice to AI
           (status) => setLoadingStatus(status) 
       );
       
@@ -198,11 +201,9 @@ const App: React.FC = () => {
       reader.onload = (event) => {
         const text = event.target?.result as string;
         setInputData(text.slice(0, 15000));
-        // Removed auto-switch to 'paste' to improve UX
         
         // AUTO DETECT GENOME BUILD
         if (text.includes("# rsid") || text.includes("23andMe")) {
-             // 23andMe files typically default to GRCh37
              setSelectedGenomeBuild('GRCh37');
         } else if (text.includes("##reference=file:///")) {
              if (text.includes("GRCh37") || text.includes("hg19")) setSelectedGenomeBuild('GRCh37');
@@ -253,7 +254,7 @@ const App: React.FC = () => {
   // --- Render ---
 
   if (currentView === 'LANDING') {
-    return <LandingPage onEnter={enterHub} />;
+    return <LandingPage onEnter={enterHub} language={language} setLanguage={setLanguage} />;
   }
 
   // Common Header
@@ -290,7 +291,7 @@ const App: React.FC = () => {
                 }`}
               >
                   {isSecureSession ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                  {isSecureSession ? "Secure Enclave: Active" : "Connect Securely"}
+                  {isSecureSession ? "Secure Enclave" : "Connect Key"}
               </button>
 
               {/* Module Switcher (Sidebar Mini) */}
@@ -365,10 +366,12 @@ const App: React.FC = () => {
                                 <ShieldCheck className="w-3 h-3" /> Digital Twin Core
                             </div>
                             <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-none font-brand">
-                                Digital <span className="text-emerald-400">Twin</span> Construction
+                                {language === 'es' ? 'Construcción de' : 'Digital'} <span className="text-emerald-400">{language === 'es' ? 'Gemelo' : 'Twin'}</span> {language === 'es' ? 'Digital' : 'Construction'}
                             </h1>
                             <p className="text-slate-400 text-lg max-w-lg leading-relaxed">
-                                Upload <strong>your DNA data (VCF)</strong> to instantiate your biological digital twin. Powered by AlphaMissense Logic for rigorous biophysical validation.
+                                {language === 'es' 
+                                ? "Carga tus datos de ADN (VCF) para instanciar tu gemelo digital biológico. Potenciado por lógica AlphaMissense para validación biofísica."
+                                : "Upload your DNA data (VCF) to instantiate your biological digital twin. Powered by AlphaMissense Logic for rigorous biophysical validation."}
                             </p>
                         </div>
                     </div>
@@ -380,7 +383,7 @@ const App: React.FC = () => {
                                 <div className="lg:col-span-7 flex flex-col">
                                     <div className="flex items-center justify-between mb-6">
                                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                            <Database className="w-4 h-4" /> Twin Source Data
+                                            <Database className="w-4 h-4" /> {language === 'es' ? 'Datos Fuente' : 'Twin Source Data'}
                                         </h3>
                                         {inputData && (
                                             <button onClick={() => { setInputData(""); setUploadedFileName(null); }} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
@@ -393,19 +396,19 @@ const App: React.FC = () => {
                                             onClick={() => setInputType('upload')}
                                             className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${inputType === 'upload' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
-                                            <Upload className="w-3 h-3" /> Upload Your DNA
+                                            <Upload className="w-3 h-3" /> Upload
                                         </button>
                                         <button 
                                             onClick={() => setInputType('paste')}
                                             className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${inputType === 'paste' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
-                                            <FileCode className="w-3 h-3" /> Manual Input
+                                            <FileCode className="w-3 h-3" /> Manual
                                         </button>
                                         <button 
                                             onClick={() => setInputType('library')}
                                             className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${inputType === 'library' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
-                                            <FileJson className="w-3 h-3" /> Demo Patients
+                                            <FileJson className="w-3 h-3" /> Demo
                                         </button>
                                     </div>
 
@@ -557,7 +560,7 @@ const App: React.FC = () => {
                                             disabled={!inputData}
                                             className="w-full"
                                         >
-                                            INSTANTIATE TWIN
+                                            {language === 'es' ? 'EJECUTAR ANÁLISIS' : 'RUN ANALYSIS'}
                                             <ArrowRight className="w-5 h-5" />
                                         </SciFiButton>
                                     </div>
@@ -619,7 +622,7 @@ const App: React.FC = () => {
                                 className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-all shadow-lg"
                             >
                                 <RotateCcw className="w-3.5 h-3.5" />
-                                New Analysis
+                                {language === 'es' ? 'Nuevo Análisis' : 'New Analysis'}
                             </button>
                             
                             <button 
@@ -627,7 +630,7 @@ const App: React.FC = () => {
                                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-emerald-50 hover:shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all"
                             >
                                 <Download className="w-4 h-4" />
-                                Download Clinical Summary (PDF)
+                                PDF Report
                             </button>
                             <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 overflow-x-auto max-w-full">
                                  {['overview', 'variants', 'pharma', 'oncology', 'phenotypes'].map((tab) => (
@@ -660,7 +663,7 @@ const App: React.FC = () => {
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2 font-brand">
                                             <Target className="w-5 h-5 text-emerald-400" />
-                                            Executive Summary
+                                            {language === 'es' ? 'Resumen Ejecutivo' : 'Executive Summary'}
                                         </h3>
                                         <p className="text-slate-300 leading-loose text-base">
                                             {result.patientSummary}
@@ -770,39 +773,13 @@ const App: React.FC = () => {
                         )}
 
                         {activeTab === 'oncology' && (
-                            <div className="glass-panel rounded-xl overflow-hidden border border-white/5">
-                                <table className="min-w-full divide-y divide-white/5">
-                                    <thead className="bg-slate-900/50">
-                                        <tr>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Gene</th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Predisposition</th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Risk Score</th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Notes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {(!result.oncologyProfiles || result.oncologyProfiles.length === 0) && (
-                                            <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-500 italic">No oncology risks detected.</td></tr>
-                                        )}
-                                        {result.oncologyProfiles?.map((profile, idx) => (
-                                            <tr key={idx} className="hover:bg-white/5 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{profile.gene}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{profile.predisposition}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <span className={`text-sm font-bold mr-3 w-8 text-right ${profile.riskScore > 50 ? 'text-orange-400' : 'text-emerald-400'}`}>
-                                                            {profile.riskScore}
-                                                        </span>
-                                                        <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                                            <div className={`h-full rounded-full shadow-[0_0_10px_currentColor] ${profile.riskScore > 75 ? 'bg-red-500 text-red-500' : profile.riskScore > 40 ? 'bg-orange-400 text-orange-400' : 'bg-emerald-500 text-emerald-500'}`} style={{width: `${profile.riskScore}%`}}></div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-slate-400">{profile.notes}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                {(!result.oncologyProfiles || result.oncologyProfiles.length === 0) && (
+                                    <p className="text-slate-500 col-span-2 text-center py-20 italic">No oncology risks detected.</p>
+                                )}
+                                {result.oncologyProfiles?.map((profile, idx) => (
+                                    <OncologyDetailCard key={idx} profile={profile} />
+                                ))}
                             </div>
                         )}
                         
@@ -854,6 +831,13 @@ const App: React.FC = () => {
       </footer>
 
       <style>{`
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
         @keyframes scan {
             0% { top: 10%; opacity: 0; }
             10% { opacity: 1; }
@@ -868,5 +852,3 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-export default App;
