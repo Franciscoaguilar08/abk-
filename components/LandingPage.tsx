@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Scan, Dna, ArrowRight, Activity, ShieldCheck, Cpu, Network, Zap, Globe2, AlertTriangle, FileText, CheckCircle2, X } from 'lucide-react';
+import { Scan, Dna, ArrowRight, Activity, ShieldCheck, Cpu, Network, Zap, Globe2, AlertTriangle, FileText, CheckCircle2, X, Lock, Eye, Server, Trash2 } from 'lucide-react';
 import { BioBackground } from './BioBackground';
 
 interface LandingPageProps {
@@ -9,6 +9,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const handleStartClick = () => {
     setShowDisclaimer(true);
@@ -152,12 +153,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                 <div className="mt-8 flex justify-center gap-6 opacity-60">
                     <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono uppercase tracking-wider group cursor-help">
                         <ShieldCheck className="w-3 h-3 text-emerald-500 group-hover:scale-110 transition-transform" />
-                        <span>HIPAA Compliant</span>
+                        <span>HIPAA Compliant Protocol</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono uppercase tracking-wider group cursor-help">
+                    <button onClick={() => setShowPrivacy(true)} className="flex items-center gap-2 text-[10px] text-slate-400 font-mono uppercase tracking-wider group cursor-pointer hover:text-white transition-colors">
                         <Dna className="w-3 h-3 text-cyan-500 group-hover:scale-110 transition-transform" />
-                        <span>Genomic Encryption</span>
-                    </div>
+                        <span className="border-b border-transparent group-hover:border-cyan-500">Privacy Policy</span>
+                    </button>
                 </div>
             </div>
 
@@ -255,6 +256,86 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                     </button>
                 </div>
 
+            </div>
+        </div>
+      )}
+
+      {/* === PRIVACY POLICY MODAL === */}
+      {showPrivacy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-fade-in">
+            <div className="relative w-full max-w-3xl bg-[#0a0f1e] border border-cyan-500/30 rounded-2xl shadow-[0_0_60px_rgba(6,182,212,0.1)] overflow-hidden flex flex-col animate-fade-in-up">
+                
+                <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-cyan-900/20 to-transparent">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                            <Lock className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-brand font-bold text-white tracking-wide">Política de Privacidad</h2>
+                            <span className="text-[10px] text-cyan-500 uppercase font-mono tracking-widest font-bold">Arquitectura Zero-Knowledge</span>
+                        </div>
+                    </div>
+                    <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-500 hover:text-white transition-colors hover:bg-white/5 rounded-lg"><X className="w-6 h-6" /></button>
+                </div>
+
+                <div className="p-8 space-y-8 max-h-[65vh] overflow-y-auto custom-scrollbar bg-[#0a0f1e]">
+                    
+                    {/* Section 1 */}
+                    <div className="flex gap-5">
+                        <div className="mt-1"><Server className="w-6 h-6 text-emerald-400" /></div>
+                        <div>
+                            <h3 className="text-base font-bold text-white mb-2">1. Soberanía Local de Datos</h3>
+                            <p className="text-sm text-slate-400 leading-relaxed text-justify">
+                                Esta aplicación opera bajo una filosofía <strong>"Local-First"</strong>. El procesamiento de tu archivo genómico (VCF) ocurre <strong>exclusivamente en la memoria de tu navegador</strong>. No subimos tu archivo crudo a ninguna base de datos centralizada ni lo almacenamos en servidores persistentes. Tú mantienes la custodia de tu ADN.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Section 2 */}
+                    <div className="flex gap-5">
+                        <div className="mt-1"><Cpu className="w-6 h-6 text-violet-400" /></div>
+                        <div>
+                            <h3 className="text-base font-bold text-white mb-2">2. Procesamiento por IA (Gemini)</h3>
+                            <p className="text-sm text-slate-400 leading-relaxed text-justify">
+                                Para generar las interpretaciones clínicas, enviamos <strong>fragmentos anonimizados</strong> (solo los IDs de las variantes, ej. "rs113488022") a la API de Google Gemini.
+                                <ul className="list-disc list-inside mt-2 ml-2 space-y-1 text-slate-500">
+                                    <li>No enviamos información personal identificable (PII) como nombre o dirección.</li>
+                                    <li>Google procesa estos datos de forma efímera para generar la respuesta ("stateless").</li>
+                                    <li>Dependiendo de la configuración de red, los datos pueden transitar por servidores de Google Cloud Platform.</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Section 3 */}
+                    <div className="flex gap-5">
+                        <div className="mt-1"><Trash2 className="w-6 h-6 text-rose-400" /></div>
+                        <div>
+                            <h3 className="text-base font-bold text-white mb-2">3. Efímero por Diseño</h3>
+                            <p className="text-sm text-slate-400 leading-relaxed text-justify">
+                                La sesión es volátil. En el momento en que <strong>cierras la pestaña o recargas la página</strong>, todos los datos genómicos y los reportes generados se eliminan permanentemente de la memoria RAM. No hay "cuentas de usuario" ni historial guardado.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Section 4 */}
+                    <div className="flex gap-5">
+                        <div className="mt-1"><Globe2 className="w-6 h-6 text-cyan-400" /></div>
+                        <div>
+                            <h3 className="text-base font-bold text-white mb-2">4. Servicios Externos</h3>
+                            <p className="text-sm text-slate-400 leading-relaxed text-justify">
+                                Para enriquecer el análisis, la aplicación consulta bases de datos públicas (UniProt, MyVariant.info, ClinVar). Estas consultas solo contienen identificadores técnicos de proteínas o variantes, nunca tu genoma completo.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div className="p-6 border-t border-white/10 bg-[#050914] flex justify-center">
+                    <button onClick={() => setShowPrivacy(false)} className="px-8 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors w-full sm:w-auto">
+                        Entendido, Volver a Inicio
+                    </button>
+                </div>
             </div>
         </div>
       )}
